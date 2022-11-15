@@ -1,2 +1,2 @@
 # R
-This it the dir for all R scripts
+This is the dir for all R scripts
