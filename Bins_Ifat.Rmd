@@ -1,0 +1,363 @@
+---
+title: "Loc"
+author: "Roni Brudno"
+date: "3/10/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data by bins
+
+
+```{r }
+library(OneR)
+library(tidyverse)
+library(ggrepel)
+library(ggplot2)
+library(viridis)
+library(RColorBrewer)
+library(gtools)
+library(ggpubr)
+library(plotrix)
+histons_loc <- read.table('loc_histons.tab', sep = "\t", header = TRUE)
+histons_loc <- histons_loc[order(histons_loc$Histone),]
+X <- split(histons_loc,histons_loc$File)
+dip_c <- X[[1]]
+GM12878 <- X[[2]] 
+GPSeq <- X[[3]]
+hela2 <- X[[4]] 
+K562 <- X[[5]]
+TSA <- X[[6]]
+
+GM12878_EC <- GM12878[, c(1,2,7)]
+hela2_EC <- hela2[, c(1,2,7)]
+K562_EC <- K562[, c(1,2,7)]
+ALL_EC <- rbind(GM12878_EC,hela2_EC,K562_EC)
+
+# ALL_EC$bins <-  bin(ALL_EC$Euclid, nbins = 5, method = "content")
+# ALL_EC$Euclid_bins <- bin(ALL_EC$Euclid, nbins = 5, labels = c("1","2","3","4","5"),method = "content")
+colnames(ALL_EC)[colnames(ALL_EC) == 'File'] <- 'Cell_line'
+ALL_EC$Cell_line <- str_remove(ALL_EC$Cell_line, "_tads.txt")
+
+ggplot(ALL_EC, aes(x=Histone, y=Euclid, color = Histone))+ geom_point(size = 3)  +  ylab("Euclidean Distance") + facet_wrap (~Cell_line) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) 
+
+# ggplot(ALL_EC, aes(x=Cell_line, y=Euclid_bins)) +
+#   geom_point() + geom_label_repel(aes(label = Histone),
+#                   box.padding   = 0.35, 
+#                   point.padding = 0.5,
+#                   segment.color = 'grey50')
+
+
+X <- split(histons_loc,histons_loc$Histone)
+H1.0 <- X[[1]]
+H1.1 <- X[[2]] 
+H1.2 <- X[[3]]
+H1.3 <- X[[4]] 
+H1.4 <- X[[5]]
+H1.5 <- X[[6]]
+
+data_to_plot_affect <- rbind(H1.0[,c(2,9)],H1.1[,c(2,9)],H1.2[,c(2,9)],H1.3[,c(2,9)],H1.4[,c(2,9)],H1.5[,c(2,9)])
+data_to_plot_affect$Histone <- as.factor(data_to_plot_affect$Histone)
+
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = std.error(x[[col]]))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- plyr::rename(data_sum, c("mean" = varname))
+ return(data_sum)
+}
+
+data_to_plot_affect <- data_summary(data_to_plot_affect, varname="GC", 
+                    groupnames=c("Histone"))
+
+
+ggplot(data_to_plot_affect, aes(x=Histone, y=GC, color = Histone)) + geom_pointrange(aes(ymin=GC-sd, ymax=GC+sd), size = 2, fatten = 1.5, show.legend = FALSE) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) 
+
+# All_GC$bins <- bin(All_GC$GC, nbins = 5, method = "content")
+# All_GC$GC_bins <- bin(All_GC$GC, nbins = 5, labels = c("1","2","3","4","5"),method = "content")
+colnames(All_GC)[colnames(All_GC) == 'File'] <- 'Cell_line'
+All_GC$Cell_line <- str_remove(All_GC$Cell_line, "_tads.txt")
+
+ggplot(All_GC, aes(x=Histone, y=GC, color = Histone))+ geom_point(size = 3) +  facet_wrap (~Cell_line) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+# ggplot(All_GC, aes(x=Cell_line, y=GC_bins)) +
+#   geom_point() + geom_label_repel(aes(label = Histone),
+#                   box.padding   = 0.35, 
+#                   point.padding = 0.5,
+#                   segment.color = 'grey50')
+
+
+```
+
+## Including Plots
+
+
+
+```{r}
+
+```
+
+
+
+
+
+## Gene expression-SP140 and LMNA
+
+
+```{r}
+expression_data <- read.table('EXPRESSION_TABLE-hg38.tab',header = TRUE,sep = "\t")
+expression_data_2 <- expression_data %>% filter(NAME == "SP140" | NAME == "LMNA")
+expression_data_all <- expression_data_2[, grep("NAME|Gm12878|HeLa|K562", names( expression_data_2 ))]
+All_histons <- expression_data %>% filter(NAME == "H1F0" | NAME == "HIST1H1A" | NAME == "HIST1H1C" | NAME == "HIST1H1D" | NAME == "HIST1H1E" | NAME == "HIST1H1B")
+All_histons <- All_histons[,grep("NAME|Gm12878|HeLa|K562", names( All_histons ))]
+All_express <- rbind(All_histons,expression_data_all)
+log2_cRPKM <- All_express[,c(2,4,6)]
+Histone_name <- c("H1-3","H1-1","H1-4","H1-5","H1-2","H1-0","SP140","LMNA")
+log2_cRPKM_plot <- data.frame(Histone_name,log2_cRPKM)
+row.names(log2_cRPKM_plot) <- log2_cRPKM_plot$Histone_name
+log2_cRPKM_plot[1] <- NULL
+colnames(log2_cRPKM_plot) <- c('GM12878','Hela','K562')
+log2_cRPKM_plot <- log2_cRPKM_plot[order(rownames(log2_cRPKM_plot)),]
+log2_cRPKM_plot <- data.matrix(log2_cRPKM_plot)
+col<- colorRampPalette(c("blue", "red"))(256)
+heatmap(log2_cRPKM_plot, scale = "none",col =  col, cexCol = 1.2)
+```
+## Own dataset rna-seq
+
+```{r}
+library("rlang")
+library(goseq)
+rna_data <- read.table('all_genes.tab',header = TRUE,sep = "\t")
+rna_data_2 <- rna_data %>% filter(genes == "SP140" | genes == "LMNA" | genes == "H1F0" | genes == "HIST1H1A" | genes == "HIST1H1C" | genes == "HIST1H1D" | genes == "HIST1H1E" | genes == "HIST1H1B")
+rna_data_2 <- rna_data_2[order(rna_data_2$genes),]
+genes <- c("ENSG00000079263", "ENSG00000160789", "ENSG00000189060", "ENSG00000124610", "ENSG00000187837", "ENSG00000124575", "ENSG00000168298", "ENSG00000184357")
+genes_lengt <- getlength(genes,'hg19','ensGene')
+genes_name_lengt <- data.frame(c("SP140","LMNA","H1F0","HIST1H1A","HIST1H1C","HIST1H1D","HIST1H1E","HIST1H1B"),genes_lengt)
+genes_name_lengt <- genes_name_lengt[-4,]
+genes_name_lengt <- genes_name_lengt[order(genes_name_lengt$c..SP140....LMNA....H1F0....HIST1H1A....HIST1H1C....HIST1H1D...),]
+
+sy5y <- 2^(rna_data_2$logCPM-log2(genes_name_lengt$genes_lengt))
+Histone_name <- c("H1-0","H1-5","H1-2","H1-3","H1-4","LMNA","SP140")
+cRPKM_plot <- data.frame(Histone_name,sy5y)
+cRPKM_plot <- cRPKM_plot %>% add_row(Histone_name = "H1-1", sy5y = 0)
+cRPKM_plot <- cRPKM_plot[order(cRPKM_plot$Histone_name),]
+row.names(cRPKM_plot) <- cRPKM_plot$Histone_name
+cRPKM_plot[1] <- NULL
+colnames(cRPKM_plot) <- c('SH-sy5y')
+all_data <- cbind(log2_cRPKM_plot,cRPKM_plot)
+all_data <- scale(data.matrix(all_data))
+col<- colorRampPalette(c("blue", "red"))(256)
+heatmap(all_data, scale = "none",col =  col, cexCol = 1.2)
+```
+
+
+
+
+
+
+## Ifat Data - DGE
+
+```{r}
+library(readxl)
+library("gplots")
+RNA_work <- read_excel("aat8127_table_s1.xlsx", sheet = "DGE")
+DGE_genes <- rbind(read.table("up_reg.tab", sep = "\t", header = TRUE),read.table("down_reg.tab", sep = "\t", header = TRUE))
+RNA_work <- RNA_work[order(RNA_work$gene_name),]
+DGE_genes <- DGE_genes[order(DGE_genes$genes),]
+genes_rna <- RNA_work[which(RNA_work$gene_name %in% DGE_genes$genes),]
+# genes_rna_pvalue <- genes_rna %>% filter(ASD.p.value < 0.05, ASD.fdr < 0.05, SCZ.p.value< 0.05, SCZ.fdr < 0.05, BD.p.value< 0.05, BD.fdr < 0.05)
+plot_genes_threshold <- genes_rna %>% filter(ASD.p.value < 0.05, ASD.fdr < 0.05)
+plot_only_log <- plot_genes_threshold[c("gene_name","ASD.log2FC")]
+plot_only_log$ASD.FC <- ifelse (plot_only_log$ASD.log2FC > 0, 2^plot_only_log$ASD.log2FC, -1/2^plot_only_log$ASD.log2FC)
+logFC <- DGE_genes[which(DGE_genes$genes %in% plot_only_log$gene_name),2]
+OV.FC <- ifelse (logFC > 0, 2^logFC, -1/2^logFC)
+plot_all_Data <- cbind(plot_only_log,logFC,OV.FC)
+row.names(plot_all_Data) <- plot_all_Data$gene_name
+plot_all_Data[1] <- NULL
+plot_just_FC <- data.matrix(plot_all_Data[c("ASD.FC","OV.FC")])
+library(ComplexHeatmap)
+library(circlize)
+
+mycols <- colorRamp2(breaks = c(-20, -10,0, 4), 
+                    colors = c("blue", "navyblue", "white","red1"))
+Heatmap(plot_just_FC, 
+        name = "Fold-Change", #title of legend
+        col = mycols ,
+        column_title = "", row_title = "",
+        row_names_gp = gpar(fontsize = 7) # Text size for row names
+        )
+```
+
+
+
+## Ifat Data - DGE/DTE 
+## First both regulated and spliced 
+
+```{r}
+library(readxl)
+library("gplots")
+RNA_work <- read_excel("aat8127_table_s1.xlsx", sheet = "DGE")
+# DTE <- read_excel("aat8127_table_s1.xlsx", sheet = "DTE")
+splice_genes <- read.table("EX_diffas.tab", sep = "\t", header = TRUE)
+DGE_genes <- rbind(read.table("up_reg.tab", sep = "\t", header = TRUE),read.table("down_reg.tab", sep = "\t", header = TRUE))
+RNA_work <- RNA_work[order(RNA_work$gene_name),]
+DGE_genes <- DGE_genes[order(DGE_genes$genes),]
+splice_genes <- splice_genes[order(splice_genes$GENE),]
+# DTE <- DTE[order(DTE$external_gene_id),]
+genes_rna <- RNA_work[which(RNA_work$gene_name %in% DGE_genes$genes),]
+genes_rna <- genes_rna[which(genes_rna$gene_name %in% splice_genes$GENE),]
+# genes_rna_pvalue <- genes_rna %>% filter(ASD.p.value < 0.05, ASD.fdr < 0.05, SCZ.p.value< 0.05, SCZ.fdr < 0.05, BD.p.value< 0.05, BD.fdr < 0.05)
+plot_genes_threshold <- genes_rna %>% filter(ASD.p.value < 0.05, ASD.fdr < 0.05)
+DTE_genes_rna <- DTE[which(DTE$external_gene_id %in% plot_genes_threshold$gene_name),]
+plot_only_log <- plot_genes_threshold[c("gene_name","ASD.log2FC")]
+plot_only_log$ASD.FC <- ifelse (plot_only_log$ASD.log2FC > 0, 2^plot_only_log$ASD.log2FC, -1/2^plot_only_log$ASD.log2FC)
+logFC <- DGE_genes[which(DGE_genes$genes %in% plot_only_log$gene_name),2]
+```
+
+
+
+## Ifat same new name
+
+```{r fig.height = 6, fig.width = 3}
+library(ggpubr)
+library(readxl)
+
+RNA_work <- read_excel("aat8127_table_s1.xlsx", sheet = "DGE")
+RNA_work <- data.frame(RNA_work[grep("HIST1", RNA_work$gene_name),])
+RNA_work$ASD.fdr <- round(RNA_work$ASD.fdr,digits = 2) 
+plot_genes_threshold <- RNA_work 
+plot_genes_threshold <- plot_genes_threshold[c("gene_name","ASD.log2FC","SCZ.log2FC","BD.log2FC", "ASD.fdr", "SCZ.fdr", "BD.fdr")]
+plot_genes_threshold[2,1] <- "H1.3"
+plot_genes_threshold[3,1] <- "H1.1"
+plot_genes_threshold[11,1] <- "H1.4"
+plot_genes_threshold[17,1] <- "H1.5"
+plot_genes_threshold[21,1] <- "H1.2"
+TEMP_plot_genes_threshold <-plot_genes_threshold[c("gene_name","ASD.log2FC","SCZ.log2FC","BD.log2FC", "ASD.fdr", "SCZ.fdr", "BD.fdr")]
+# plot_genes_threshold$ASD.log2FC <- 2^plot_genes_threshold$ASD.log2FC
+# plot_genes_threshold$SCZ.log2FC <- 2^plot_genes_threshold$SCZ.log2FC
+# plot_genes_threshold$BD.log2FC <- 2^plot_genes_threshold$BD.log2FC
+row.names(plot_genes_threshold) <- plot_genes_threshold$gene_name
+plot_genes_threshold[1] <- NULL
+genes_threshold_pvalue <- data.matrix(plot_genes_threshold[,4:6])
+plot_genes_threshold <- data.matrix(plot_genes_threshold[,1:3])
+mycols <- colorRamp2(breaks = c(-0.2, 0, 1), 
+                     colors = c("blue", "white","red1"))
+colnames(plot_genes_threshold) <- c("ASD","SCZ","BD")
+htmp <- Heatmap(plot_genes_threshold,cell_fun = function(j, i, x, y, w, h, fill) {
+    if(genes_threshold_pvalue[i, j] <= 0.05) {
+        grid.text("*", x, y)
+    } 
+}, 
+        name = "Log(FC Gene Expression)", row_km = 4, row_km_repeats = 100, row_gap = unit(3, "mm"),  col = mycols, heatmap_legend_param = list(title_gp = gpar(fontsize = 7, fontfamily = "sans"), legend_direction = "horizontal"),
+        column_title = "", row_title = "",
+        row_names_gp = gpar(fontsize = 7, fontfamily = "sans"), column_names_gp =  gpar(fontsize = 7, fontfamily = "sans"), width = unit(3, "cm"), cluster_columns = FALSE
+        )
+
+draw(htmp, heatmap_legend_side="bottom", annotation_legend_side="right",
+           legend_grouping = "original")
+ 
+
+TEMP_plot_genes_threshold <- TEMP_plot_genes_threshold %>% filter(ASD.fdr <= 0.05 | SCZ.fdr <= 0.05 | BD.fdr <= 0.05)
+TEMP_plot_genes_threshold <- TEMP_plot_genes_threshold[,1:4]
+TEMP_plot_genes_threshold$ASD <- 2^TEMP_plot_genes_threshold$ASD.log2FC
+TEMP_plot_genes_threshold$SCZ <- 2^TEMP_plot_genes_threshold$SCZ.log2FC
+TEMP_plot_genes_threshold$BD <- 2^TEMP_plot_genes_threshold$BD.log2FC
+# TEMP_plot_genes_threshold$Control.log2FC <- 2^TEMP_plot_genes_threshold$Control.log2FC
+econdatalong <- gather(TEMP_plot_genes_threshold, key="Disorders", value="FC(Gene Expression)", c("ASD", "SCZ", "BD"))
+ggplot(econdatalong, aes(x=Disorders, y=`FC(Gene Expression)`, fill = Disorders))+
+  geom_bar(stat='identity') +
+  facet_wrap(gene_name ~ ., nrow = 2)  + theme_bw() + theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(), text = element_text(family = "sans",size = 7))
+
+
+Reciprocal <- read_excel("mmc2.xlsx", sheet = "Human_Reciprocal")
+Reciprocal <- data.frame(Reciprocal[grep("HIST1", Reciprocal$GeneID),])
+Reciprocal_num <- dplyr::pull(Reciprocal, NaturalLogBeta_Reciprocal)
+Histones <- dplyr::pull(Reciprocal, GeneID)
+Histones[6] <- "H1.4"
+Histones[7] <- "H1.3"
+Histones[13] <- "H1.5"
+df <- as.data.frame(cbind(Reciprocal_num,Histones))
+df %>%
+  arrange(desc(as.numeric(Reciprocal_num))) %>% 
+  mutate(Histones=factor(Histones, levels=Histones)) %>%
+ggplot(aes(x=Histones, y=as.numeric(Reciprocal_num))) +
+  geom_bar(colour="white",size = 4,stat="identity",fill="gray44") + theme_bw() + ylab("ln(β(gene expression,copy number))") + scale_y_reverse() + coord_flip() + theme(text = element_text(family = "sans", size = 7)) + annotate("text", x = "HIST1H4D", y = -0.26, label = "*", size = 3) + annotate("text", x = "HIST1H4C", y = -0.4, label = "***", size = 3) + annotate("text", x = "HIST1H3J", y = -0.32, label = "*", size = 3) + annotate("text", x = "HIST1H3I", y = -0.36, label = "**", size = 3) + annotate("text", x = "HIST1H3G", y = -0.35, label = "*", size = 3) + annotate("text", x = "HIST1H3F", y = -0.38, label = "*", size = 3) +  annotate("text", x = "HIST1H3A", y = -0.37, label = "**", size = 3)+ annotate("text", x = "HIST1H2BM", y = -0.31, label = "*", size = 3) + annotate("text", x = "HIST1H2BI", y = -0.33, label = "*", size = 3) + annotate("text", x = "HIST1H2AM", y = -0.2, label = "*", size = 3) + annotate("text", x = "HIST1H2AK", y = -0.34, label = "**", size = 3) + annotate("text", x = "HIST1H2AJ", y = -0.3, label = "*", size = 3) + annotate("text", x = "HIST1H2AG", y = -0.29, label = "**", size = 3)  + annotate("text", x = "HIST1H2AE", y = -0.27, label = "*", size = 3) + annotate("text", x = "H1.4", y = -0.4, label = "**", size = 3) + annotate("text", x = "H1.3", y = -0.42, label = "*", size = 3) + annotate("text", x = "H1.5", y = -0.44, label = "*", size = 3)
+``` 
+
+
+
+
+```{r}
+TEMP_plot_genes_threshold <- TEMP_plot_genes_threshold %>% filter(ASD.fdr <= 0.05 | SCZ.fdr <= 0.05 | BD.fdr <= 0.05)
+TEMP_plot_genes_threshold <- TEMP_plot_genes_threshold[,1:4]
+TEMP_plot_genes_threshold$ASD <- 2^TEMP_plot_genes_threshold$ASD.log2FC
+TEMP_plot_genes_threshold$SCZ <- 2^TEMP_plot_genes_threshold$SCZ.log2FC
+TEMP_plot_genes_threshold$BD <- 2^TEMP_plot_genes_threshold$BD.log2FC
+# TEMP_plot_genes_threshold$Control.log2FC <- 2^TEMP_plot_genes_threshold$Control.log2FC
+econdatalong <- gather(TEMP_plot_genes_threshold, key="Disorders", value="FC(Gene Expression)", c("ASD", "SCZ", "BD"))
+g <- ggplot(econdatalong, aes(x=Disorders, y=`FC(Gene Expression)`, fill = Disorders))+
+  geom_bar(stat='identity') +
+  facet_wrap(gene_name ~ ., nrow = 2)  + theme_bw() + theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(), text = element_text(family = "sans",size = 7))
+```
+
+
+
+
+
+
+```{r fig.height = 6, fig.width = 3}
+Reciprocal <- read_excel("mmc2.xlsx", sheet = "Human_Reciprocal")
+Reciprocal <- data.frame(Reciprocal[grep("HIST1", Reciprocal$GeneID),])
+Reciprocal_num <- dplyr::pull(Reciprocal, NaturalLogBeta_Reciprocal)
+Histones <- dplyr::pull(Reciprocal, GeneID)
+Histones[6] <- "H1.4"
+Histones[7] <- "H1.3"
+Histones[13] <- "H1.5"
+df <- as.data.frame(cbind(Reciprocal_num,Histones))
+gf <- df %>%
+  arrange(desc(as.numeric(Reciprocal_num))) %>% 
+  mutate(Histones=factor(Histones, levels=Histones)) %>%
+ggplot(aes(x=Histones, y=as.numeric(Reciprocal_num))) +
+  geom_bar(colour="white",size = 4,stat="identity",fill="gray44") + theme_bw() + ylab("ln(β(gene expression,copy number))") + scale_y_reverse() + coord_flip() + theme(text = element_text(family = "sans", size = 7)) + annotate("text", x = "HIST1H4D", y = -0.26, label = "*", size = 3) + annotate("text", x = "HIST1H4C", y = -0.4, label = "***", size = 3) + annotate("text", x = "HIST1H3J", y = -0.32, label = "*", size = 3) + annotate("text", x = "HIST1H3I", y = -0.36, label = "**", size = 3) + annotate("text", x = "HIST1H3G", y = -0.35, label = "*", size = 3) + annotate("text", x = "HIST1H3F", y = -0.38, label = "*", size = 3) +  annotate("text", x = "HIST1H3A", y = -0.37, label = "**", size = 3)+ annotate("text", x = "HIST1H2BM", y = -0.31, label = "*", size = 3) + annotate("text", x = "HIST1H2BI", y = -0.33, label = "*", size = 3) + annotate("text", x = "HIST1H2AM", y = -0.2, label = "*", size = 3) + annotate("text", x = "HIST1H2AK", y = -0.34, label = "**", size = 3) + annotate("text", x = "HIST1H2AJ", y = -0.3, label = "*", size = 3) + annotate("text", x = "HIST1H2AG", y = -0.29, label = "**", size = 3)  + annotate("text", x = "HIST1H2AE", y = -0.27, label = "*", size = 3) + annotate("text", x = "H1.4", y = -0.4, label = "**", size = 3) + annotate("text", x = "H1.3", y = -0.42, label = "*", size = 3) + annotate("text", x = "H1.5", y = -0.44, label = "*", size = 3)
+
+grob <- grid.grabExpr(draw(htmp, heatmap_legend_side="bottom", annotation_legend_side="right",
+           legend_grouping = "original"))
+
+library(cowplot)
+library(grid)
+
+
+gb_heatmap <- grid.grabExpr(draw(htmp, heatmap_legend_side="bottom", annotation_legend_side="right",
+           legend_grouping = "original", newpage = FALSE))
+
+
+plot_grid(gb_heatmap)
+ggdraw() +
+  plot_grid(gb_heatmap) +
+  draw_plot(gf, x = .5, y = .5, width = .5, height = .5) +
+  draw_plot(g, x = 0, y = 0, width = 1, height = 0.5) +
+  draw_plot_label(label = c("A", "B", "C"), size = 15,
+                  x = c(0, 0.5, 0), y = c(1, 1, 0.5))
+
+```
+

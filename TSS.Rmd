@@ -1,0 +1,731 @@
+---
+title: "TSS-Histones"
+author: "Me"
+date: "17 2 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+## Data Preparing 
+## Exons
+
+```{r }
+data_exons <- read.table("EX_unreg_hist_try1.tab",header= TRUE,fill = TRUE)
+data_exons <- data_exons[order(data_exons$GENE),]
+data_TSS <- read.table('all_tss',header= TRUE,fill = TRUE)
+data_TSS <- data_TSS[order(data_TSS$name2),]
+data_TSS <- data_TSS[which(data_TSS$name2 %in% data_exons$GENE),]
+
+# write.table(data_exons, file = "EX_unreg_hist_codinggenes.tab", quote = FALSE, sep = "\t",
+#              row.names = FALSE)
+# write.table(data_TSS, file = "TSS_exons_unreg_codinggens.tab", quote = FALSE, sep = "\t",
+#              row.names = FALSE)
+```
+
+## Data Preparing 
+## Introns
+
+
+```{r}
+data_introns <- read.table("INT_unreg.tab",header= TRUE,fill = TRUE)
+data_introns <- data_introns[order(data_introns$GENE),]
+data_TSS <- read.table('all_tss',header= TRUE,fill = TRUE)
+data_TSS <- data_TSS[order(data_TSS$name2),]
+data_TSS <- data_TSS[which(data_TSS$name2 %in% data_introns$GENE),]
+
+write.table(data_introns, file = "INT_unreg_hist.tab", quote = FALSE, sep = "\t",
+             row.names = FALSE)
+write.table(data_TSS, file = "TSS_introns_unreg.tab", quote = FALSE, sep = "\t",
+             row.names = FALSE)
+```
+
+
+
+## Data Spliting
+
+```{r}
+data_to_split_strand <- read.table('introns_tss_unreg.bed',header = TRUE)
+x <- split(data_to_split_strand,data_to_split_strand$strand)
+minus_strand <- x[[1]]
+plus_strand <- x[[2]]
+write.table(minus_strand, file = "introns_minus_strand_tss_unreg.tab", quote = FALSE, sep = "\t",
+            row.names = FALSE, col.names = FALSE)
+write.table(plus_strand, file = "introns_plus_strand_tss_unreg.tab", quote = FALSE, sep = "\t",
+            row.names = FALSE, col.names = FALSE)
+```
+
+
+
+## Plots - H1.2 - Endo(WT) unaffected vs affected
+
+```{r}
+library(dplyr)
+library(ggplot2)
+H12_data <- read.table("H12_endo_plot_exons_new_level.tab",header= TRUE,fill = TRUE)
+len <- nrow(H12_data)
+pos <- seq(from = 1, to = len, by = 1)
+H12_data <- cbind(H12_data,pos)
+total_days <- diff(range(H12_data$pos))
+span <- 100/total_days
+
+fit_unaffected <- loess(H12_data$Unaffected ~ pos, degree=1, span = span, data=H12_data)
+fit_affected <- loess(H12_data$Affected ~ pos, degree=1, span = span, data=H12_data)
+colors <- c("Unaffected" = "deepskyblue", "Affected" = "navyblue")
+H12_data %>% mutate(smooth_unaffected = fit_unaffected$fitted, smooth_affected = fit_affected$fitted) %>% ggplot(aes(pos, H12_data$Unaffected)) + geom_line(aes(y = smooth_unaffected,color = "Unaffected"), size = 1.5) + geom_line(aes(y = smooth_affected,color = "Affected"), size = 1.5) + geom_vline(xintercept = 2000, linetype = "longdash") + labs(x = "bps",
+         y = "H1.2 Coverage",
+         color = "") +
+    scale_color_manual(values = colors) + theme_bw() + scale_x_continuous(breaks = waiver(), labels = c(-2000,-1500,-1000,-500,0,500))
+```
+
+
+## Plots - H1.5 - Endo(WT) unaffected vs affected
+
+```{r}
+library(dplyr)
+library(ggplot2)
+H15_data <- read.table("H15_endo_plot_exons_new_level.tab",header= TRUE,fill = TRUE)
+len <- nrow(H15_data)
+pos <- seq(from = 1, to = len, by = 1)
+H15_data <- cbind(H15_data,pos)
+total_days <- diff(range(H15_data$pos))
+span <- 100/total_days
+
+fit_unaffected <- loess(H15_data$Unaffected ~ pos, degree=1, span = span, data=H15_data)
+fit_affected <- loess(H15_data$Affected ~ pos, degree=1, span = span, data=H15_data)
+colors <- c("Unaffected" = "red1", "Affected" = "red4")
+H15_data %>% mutate(smooth_unaffected = fit_unaffected$fitted, smooth_affected = fit_affected$fitted) %>% ggplot(aes(pos, H15_data$Unaffected)) + geom_line(aes(y = smooth_unaffected,color = "Unaffected"), size = 1.5) + geom_line(aes(y = smooth_affected,color = "Affected"), size = 1.5) + geom_vline(xintercept = 2000, linetype = "longdash") + labs(x = "bps",
+         y = "H1.5 Coverage",
+         color = "") +
+    scale_color_manual(values = colors) + theme_bw() + scale_x_continuous(breaks = waiver(), labels = c(-2000,-1500,-1000,-500,0,500))
+```
+
+
+## Checking smooth
+## H1.2
+
+```{r}
+smooth_unaff <- smooth.spline(H12_data$Unaffected,nknots = 15)
+smooth_aff <- smooth.spline(H12_data$Affected,nknots = 15)
+data_after_smooth <- data.frame(smooth_aff$y,smooth_unaff$y)
+colnames(data_after_smooth) <- c('Affected','Unaffected')
+data_after_smooth <- data_after_smooth[-c(1:1000),]
+len <- nrow(data_after_smooth)
+pos <- seq(from = 1, to = len, by = 1)
+data_after_smooth <- cbind(data_after_smooth,pos)
+total_days <- diff(range(data_after_smooth$pos))
+span <- 100/total_days
+
+fit_unaffected <- loess(data_after_smooth$Unaffected ~ pos, degree=1, span = span, data=data_after_smooth)
+fit_affected <- loess(data_after_smooth$Affected ~ pos, degree=1, span = span, data=data_after_smooth)
+colors <- c("Unaffected" = "deepskyblue", "Affected" = "navyblue")
+data_after_smooth %>% mutate(smooth_unaffected = fit_unaffected$fitted, smooth_affected = fit_affected$fitted) %>% ggplot(aes(pos, data_after_smooth$Unaffected)) + geom_line(aes(y = smooth_unaffected,color = "Unaffected"), size = 1.5) + geom_line(aes(y = smooth_affected,color = "Affected"), size = 1.5) + geom_vline(xintercept = 1000, linetype = "longdash") + labs(x = "bps",
+         y = "H1.2 Coverage",
+         color = "") +
+    scale_color_manual(values = colors) + theme_bw() + scale_x_continuous(breaks = waiver(), labels = c(-1000,-500,"TSS",500))
+```
+
+##H1.5
+
+
+```{r}
+smooth_unaff <- smooth.spline(H15_data$Unaffected,nknots = 11)
+smooth_aff <- smooth.spline(H15_data$Affected,nknots = 11)
+data_after_smooth <- data.frame(smooth_aff$y,smooth_unaff$y)
+colnames(data_after_smooth) <- c('Affected','Unaffected')
+data_after_smooth <- data_after_smooth[-c(1:1000),]
+len <- nrow(data_after_smooth)
+pos <- seq(from = 1, to = len, by = 1)
+data_after_smooth <- cbind(data_after_smooth,pos)
+total_days <- diff(range(data_after_smooth$pos))
+span <- 100/total_days
+
+fit_unaffected <- loess(data_after_smooth$Unaffected ~ pos, degree=1, span = span, data=data_after_smooth)
+fit_affected <- loess(data_after_smooth$Affected ~ pos, degree=1, span = span, data=data_after_smooth)
+colors <- c("Unaffected" = "deepskyblue", "Affected" = "navyblue")
+data_after_smooth %>% mutate(smooth_unaffected = fit_unaffected$fitted, smooth_affected = fit_affected$fitted) %>% ggplot(aes(pos, data_after_smooth$Unaffected)) + geom_line(aes(y = smooth_unaffected,color = "Unaffected"), size = 1.5) + geom_line(aes(y = smooth_affected,color = "Affected"), size = 1.5) + geom_vline(xintercept = 1000, linetype = "longdash") + labs(x = "bps",
+         y = "H1.5 Coverage",
+         color = "") +
+    scale_color_manual(values = colors) + theme_bw() + scale_x_continuous(breaks = waiver(), labels = c(-1000,-500,"TSS",500))
+```
+
+
+
+## mean plot- H1.2
+
+
+```{r}
+library(ggpubr)
+library(plotrix)
+pdf("mean_plot_h12_ill.pdf")
+affected <- data.frame(H12_data[,1])
+unaffected <- data.frame(H12_data[,2])
+affected$Group <- as.factor('affected')
+names(affected)[1] <- 'H1.2-Coverage'
+unaffected$Group <- as.factor('unaffected')
+names(unaffected)[1] <- 'H1.2-Coverage'
+data_to_plot_affect <- rbind(affected,unaffected)
+compare_means(`H1.2-Coverage` ~ Group, data =  data_to_plot_affect, method = "t.test")
+p <- ggboxplot(data_to_plot_affect, x = "Group", y = "H1.2-Coverage",
+          color = rev(c("Unaffected" = "deepskyblue", "Affected" = "navyblue"))) +
+  stat_compare_means(label = "p.signif",ref.group = "unaffected")
+p + rremove("x.text") + rremove("x.title")
+print(p)
+dev.off()
+ data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = std.error(x[[col]]))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- plyr::rename(data_sum, c("mean" = varname))
+ return(data_sum)
+}
+
+data_to_plot_affect <- data_summary(data_to_plot_affect, varname="H1.2-Coverage", 
+                    groupnames=c("Group"))
+x_categories = rev(c("deepskyblue", "navyblue"))
+ggplot(data_to_plot_affect, aes(x=Group, y=`H1.2-Coverage`)) + geom_pointrange(aes(ymin=`H1.2-Coverage`-sd, ymax=`H1.2-Coverage`+sd), size = 2, fatten = 1.5, show.legend = FALSE, color = x_categories) + scale_colour_manual(values = c("affected" = "red4", "unaffected" = "red1")) + theme_bw() + annotate("text", x = "unaffected", y = 0.165, label = "****") + scale_x_discrete(breaks = NULL) +
+  theme(
+    axis.title.y = element_text(size = 15) 
+  ) + labs(x = "",
+         y = "H1.2 Coverage",
+         color = "")
+ 
+```
+
+
+## mean plot- H1.5
+
+```{r}
+library(ggpubr)
+library(plotrix)
+pdf("mean_plot_h15_ill.pdf")
+affected <- data.frame(H15_data[,1])
+unaffected <- data.frame(H15_data[,2])
+affected$Group <- as.factor('affected')
+names(affected)[1] <- 'H1.5-Coverage'
+unaffected$Group <- as.factor('unaffected')
+names(unaffected)[1] <- 'H1.5-Coverage'
+data_to_plot_affect <- rbind(affected,unaffected)
+compare_means(`H1.5-Coverage` ~ Group, data =  data_to_plot_affect)
+p <- ggboxplot(data_to_plot_affect, x = "Group", y = "H1.5-Coverage",
+          color = rev(c("Unaffected" = "deepskyblue", "Affected" = "navyblue"))) +
+  stat_compare_means(label = "p.signif",ref.group = "unaffected")
+p + rremove("x.text") + rremove("x.title")
+print(p)
+dev.off()
+ data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = std.error(x[[col]]))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- plyr::rename(data_sum, c("mean" = varname))
+ return(data_sum)
+}
+
+data_to_plot_affect <- data_summary(data_to_plot_affect, varname="H1.5-Coverage", 
+                    groupnames=c("Group"))
+x_categories = rev(c("deepskyblue", "navyblue"))
+ggplot(data_to_plot_affect, aes(x=Group, y=`H1.5-Coverage`)) + geom_pointrange(aes(ymin=`H1.5-Coverage`-sd, ymax=`H1.5-Coverage`+sd), size = 2, fatten = 1.5, show.legend = FALSE, color = x_categories) + scale_colour_manual(values = c("affected" = "red4", "unaffected" = "red1")) + theme_bw() + annotate("text", x = "unaffected", y = 0.14, label = "****") + scale_x_discrete(breaks = NULL) +
+  theme(
+    axis.title.y = element_text(size = 15) 
+  ) + labs(x = "",
+         y = "H1.5 Coverage",
+         color = "")
+```
+
+
+
+## Plots_introns - H1.2 - Endo(WT) unaffected vs affected
+
+```{r}
+library(dplyr)
+library(ggplot2)
+H12_data <- read.table("H12_endo_plot_introns_new_level.tab",header= TRUE,fill = TRUE)
+
+
+smooth_unaff <- smooth.spline(H12_data$Unaffected,nknots = 14)
+smooth_aff <- smooth.spline(H12_data$Affected,nknots = 14)
+data_after_smooth <- data.frame(smooth_aff$y,smooth_unaff$y)
+colnames(data_after_smooth) <- c('Affected','Unaffected')
+data_after_smooth <- data_after_smooth[-c(1:1000),]
+len <- nrow(data_after_smooth)
+pos <- seq(from = 1, to = len, by = 1)
+data_after_smooth <- cbind(data_after_smooth,pos)
+total_days <- diff(range(data_after_smooth$pos))
+span <- 100/total_days
+
+fit_unaffected <- loess(data_after_smooth$Unaffected ~ pos, degree=1, span = span, data=data_after_smooth)
+fit_affected <- loess(data_after_smooth$Affected ~ pos, degree=1, span = span, data=data_after_smooth)
+colors <- c("Unaffected" = "red1", "Affected" = "red4")
+data_after_smooth %>% mutate(smooth_unaffected = fit_unaffected$fitted, smooth_affected = fit_affected$fitted) %>% ggplot(aes(pos, data_after_smooth$Unaffected)) + geom_line(aes(y = smooth_unaffected,color = "Unaffected"), size = 1.5) + geom_line(aes(y = smooth_affected,color = "Affected"), size = 1.5) + geom_vline(xintercept = 1000, linetype = "longdash") + labs(x = "bps",
+         y = "H1.2 Coverage",
+         color = "") +
+    scale_color_manual(values = colors) + theme_bw() + scale_x_continuous(breaks = waiver(), labels = c(-1000,-500,"TSS",500))
+
+pdf("mean_plot_h12_intron.pdf")
+affected <- data.frame(H12_data[,1])
+unaffected <- data.frame(H12_data[,2])
+affected$Group <- as.factor('affected')
+names(affected)[1] <- 'H1.2-Coverage'
+unaffected$Group <- as.factor('unaffected')
+names(unaffected)[1] <- 'H1.2-Coverage'
+data_to_plot_affect <- rbind(affected,unaffected)
+compare_means(`H1.2-Coverage` ~ Group, data =  data_to_plot_affect)
+p <- ggboxplot(data_to_plot_affect, x = "Group", y = "H1.2-Coverage",
+          color = rev(c("Unaffected" = "red1", "Affected" = "red4"))) +
+  stat_compare_means(label = "p.signif",ref.group = "unaffected")
+p + rremove("x.text") + rremove("x.title")
+print(p)
+dev.off()
+ data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = std.error(x[[col]]))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- plyr::rename(data_sum, c("mean" = varname))
+ return(data_sum)
+}
+
+data_to_plot_affect <- data_summary(data_to_plot_affect, varname="H1.2-Coverage", 
+                    groupnames=c("Group"))
+x_categories = c("red4", "red1");
+ggplot(data_to_plot_affect, aes(x=Group, y=`H1.2-Coverage`)) + geom_pointrange(aes(ymin=`H1.2-Coverage`-sd, ymax=`H1.2-Coverage`+sd), size = 2, fatten = 1.5, show.legend = FALSE, color = x_categories) + scale_colour_manual(values = c("affected" = "red4", "unaffected" = "red1")) + theme_bw() + annotate("text", x = "unaffected", y = 0.15, label = "****") + scale_x_discrete(breaks = NULL) +
+  theme(
+    axis.title.y = element_text(size = 15) 
+  ) + labs(x = "",
+         y = "H1.2 Coverage",
+         color = "")
+```
+
+
+
+## Plots_introns - H1.5 - Endo(WT) unaffected vs affected
+
+```{r}
+H15_data <- read.table("H15_endo_plot_introns_new_level.tab",header= TRUE,fill = TRUE)
+smooth_unaff <- smooth.spline(H15_data$Unaffected,nknots = 10)
+smooth_aff <- smooth.spline(H15_data$Affected,nknots = 10)
+data_after_smooth <- data.frame(smooth_aff$y,smooth_unaff$y)
+colnames(data_after_smooth) <- c('Affected','Unaffected')
+data_after_smooth <- data_after_smooth[-c(1:1000),]
+len <- nrow(data_after_smooth)
+pos <- seq(from = 1, to = len, by = 1)
+data_after_smooth <- cbind(data_after_smooth,pos)
+total_days <- diff(range(data_after_smooth$pos))
+span <- 100/total_days
+
+fit_unaffected <- loess(data_after_smooth$Unaffected ~ pos, degree=1, span = span, data=data_after_smooth)
+fit_affected <- loess(data_after_smooth$Affected ~ pos, degree=1, span = span, data=data_after_smooth)
+colors <- c("Unaffected" = "red1", "Affected" = "red4")
+data_after_smooth %>% mutate(smooth_unaffected = fit_unaffected$fitted, smooth_affected = fit_affected$fitted) %>% ggplot(aes(pos, data_after_smooth$Unaffected)) + geom_line(aes(y = smooth_unaffected,color = "Unaffected"), size = 1.5) + geom_line(aes(y = smooth_affected,color = "Affected"), size = 1.5) + geom_vline(xintercept = 1000, linetype = "longdash") + labs(x = "bps",
+         y = "H1.5 Coverage",
+         color = "") +
+    scale_color_manual(values = colors) + theme_bw() + scale_x_continuous(breaks = waiver(), labels = c(-1000,-500,"TSS",500))
+
+pdf("mean_plot_h15_intron.pdf")
+affected <- data.frame(H15_data[,1])
+unaffected <- data.frame(H15_data[,2])
+affected$Group <- as.factor('affected')
+names(affected)[1] <- 'H1.5-Coverage'
+unaffected$Group <- as.factor('unaffected')
+names(unaffected)[1] <- 'H1.5-Coverage'
+data_to_plot_affect <- rbind(affected,unaffected)
+compare_means(`H1.5-Coverage` ~ Group, data =  data_to_plot_affect)
+ p <- ggboxplot(data_to_plot_affect, x = "Group", y = "H1.5-Coverage",
+          color = rev(c("Unaffected" = "red1", "Affected" = "red4"))) +
+  stat_compare_means(label = "p.signif",ref.group = "unaffected")
+ p + rremove("x.text") + rremove("x.title")
+print(p)
+dev.off()
+
+ data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = std.error(x[[col]]))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- plyr::rename(data_sum, c("mean" = varname))
+ return(data_sum)
+}
+
+data_to_plot_affect <- data_summary(data_to_plot_affect, varname="H1.5-Coverage", 
+                    groupnames=c("Group"))
+x_categories = c("red4", "red1");
+ggplot(data_to_plot_affect, aes(x=Group, y=`H1.5-Coverage`)) + geom_pointrange(aes(ymin=`H1.5-Coverage`-sd, ymax=`H1.5-Coverage`+sd), size = 2, fatten = 1.5, show.legend = FALSE, color = x_categories) + scale_colour_manual(values = c("affected" = "red4", "unaffected" = "red1")) + theme_bw() + annotate("text", x = "unaffected", y = 0.13, label = "****") + scale_x_discrete(breaks = NULL) +
+  theme(
+    axis.title.y = element_text(size = 15) 
+  ) + labs(x = "",
+         y = "H1.5 Coverage",
+         color = "")
+
+```
+
+
+
+## Check Transcription level of both groups on logCPM
+
+```{r}
+library(ggpubr)
+library(plotrix)
+data_exons_unreg <- read.table("INT_unreg_hist.tab",header= TRUE,fill = TRUE)
+data_exons_unreg <- data_exons_unreg[order(data_exons_unreg$GENE),]
+transcrpit_data <- read.table("all_genes.tab",header= TRUE,fill = TRUE)
+transcrpit_data <- transcrpit_data[which(transcrpit_data$genes %in% unique(data_exons_unreg$GENE)),]
+transcrpit_data <- transcrpit_data[order(transcrpit_data$genes),]
+data_exons_diff <- read.table("INT_diffas_hist.tab",header= TRUE,fill = TRUE)
+data_exons_diff <- data_exons_diff[order(data_exons_diff$GENE),]
+transcrpit_data_diff <- read.table("all_genes.tab",header= TRUE,fill = TRUE)
+transcrpit_data_diff <- transcrpit_data_diff[which(transcrpit_data_diff$genes %in% unique(data_exons_diff$GENE)),]
+transcrpit_data_diff <- transcrpit_data_diff[order(transcrpit_data_diff$genes),]
+affected <- data.frame(transcrpit_data_diff$logCPM)
+unaffected <- data.frame(transcrpit_data$logCPM)
+affected$Group <- as.factor('affected')
+names(affected)[1] <- 'logCPM'
+unaffected$Group <- as.factor('unaffected')
+names(unaffected)[1] <- 'logCPM'
+data_to_plot_affect <- rbind(affected,unaffected)
+compare_means(`logCPM` ~ Group, data =  data_to_plot_affect)
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = std.error(x[[col]]))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- plyr::rename(data_sum, c("mean" = varname))
+ return(data_sum)
+}
+
+data_to_plot_affect <- data_summary(data_to_plot_affect, varname="logCPM", 
+                    groupnames=c("Group"))
+```
+
+
+
+## Check Transcription level of both groups and make new on the same level 
+
+```{r}
+data_exons_unreg <- read.table("INT_unreg_hist.tab",header= TRUE,fill = TRUE)
+data_exons_unreg <- data_exons_unreg[order(data_exons_unreg$GENE),]
+data_exons_diff <- read.table("INT_diffas_hist.tab",header= TRUE,fill = TRUE)
+data_exons_diff <- data_exons_diff[order(data_exons_diff$GENE),]
+data_exons_unreg <- data_exons_unreg[which(data_exons_unreg$GENE %in% data_exons_diff$GENE),]
+data_TSS <- read.table('all_tss',header= TRUE,fill = TRUE)
+data_TSS <- data_TSS[order(data_TSS$name2),]
+data_TSS_unreg <- data_TSS[which(data_TSS$name2 %in% data_exons_unreg$GENE),]
+data_TSS_diff <- data_TSS[which(data_TSS$name2 %in% data_exons_diff$GENE),]
+
+write.table(data_exons_unreg, file = "INT_unreg_hist_same_level.tab", quote = FALSE, sep = "\t",
+              row.names = FALSE)
+write.table(data_TSS_unreg, file = "TSS_introns_unreg_same_level.tab", quote = FALSE, sep = "\t",
+              row.names = FALSE)
+
+write.table(data_exons_diff, file = "INT_diff_hist_same_level.tab", quote = FALSE, sep = "\t",
+              row.names = FALSE)
+write.table(data_TSS_diff, file = "TSS_introns_diff_same_level.tab", quote = FALSE, sep = "\t",
+              row.names = FALSE)
+
+```
+
+
+
+
+
+
+
+## Plots_exons - H1.2 - Endo(WT) unaffected vs affected
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+H12_exons_data <- read.table('file_exon_affected_h12_flip.txt',sep=",")
+Unaffected <- as.numeric(H12_exons_data[1,])
+Affected <- as.numeric(H12_exons_data[2,])
+H12_exons_data <- data.frame(Unaffected,Affected)
+H12_exons_data <- H12_exons_data[-c(110:115,116:153,153:160,298:335),]
+smooth_unaff <- smooth.spline(H12_exons_data$Unaffected,nknots = 10)
+smooth_aff <- smooth.spline(H12_exons_data$Affected,nknots = 10)
+data_after_smooth <- data.frame(smooth_aff$y,smooth_unaff$y)
+colnames(data_after_smooth) <- c('Affected','Unaffected')
+len <- nrow(data_after_smooth)
+pos <- seq(from = 1, to = len, by = 1)
+data_after_smooth <- cbind(data_after_smooth,pos)
+total_days <- diff(range(data_after_smooth$pos))
+span <- 21/total_days
+
+fit_unaffected <- loess(data_after_smooth$Unaffected ~ pos, degree=1, span = span, data=data_after_smooth)
+fit_affected <- loess(data_after_smooth$Affected ~ pos, degree=1, span = span, data=data_after_smooth)
+colors <- c("Unaffected" = "deepskyblue", "Affected" = "navyblue")
+data_after_smooth %>% mutate(smooth_unaffected = fit_unaffected$fitted, smooth_affected = fit_affected$fitted) %>% ggplot(aes(pos, data_after_smooth$Unaffected)) + geom_line(aes(y = smooth_unaffected,color = "Unaffected"), size = 1.5) + geom_line(aes(y = smooth_affected,color = "Affected"), size = 1.5) + geom_vline(xintercept = 109, linetype = "longdash") + geom_vline(xintercept = 178, linetype = "longdash") + geom_vline(xintercept = 247, linetype = "longdash") + labs(x = "",
+         y = "H1.2 Coverage",
+         color = "") +
+    scale_color_manual(values = colors) + theme_bw() +  scale_x_continuous(breaks = NULL)
+
+
+
+affected <- data.frame(H12_exons_data[,2])
+unaffected <- data.frame(H12_exons_data[,1])
+affected$Group <- as.factor('affected')
+names(affected)[1] <- 'Mean'
+unaffected$Group <- as.factor('unaffected')
+names(unaffected)[1] <- 'Mean'
+data_to_plot_affect <- rbind(affected,unaffected)
+compare_means(Mean ~ Group, data =  data_to_plot_affect)
+p <- ggboxplot(data_to_plot_affect, x = "Group", y = "Mean",
+          color = rev(c("Unaffected" = "deepskyblue", "Affected" = "navyblue")), ylab = "H1.2 Coverage") +
+  stat_compare_means(label = "p.signif",ref.group = "affected")
+p + rremove("x.text") + rremove("x.title")
+
+
+```
+
+## Plots_exons - H1.5 - Endo(WT) unaffected vs affected
+
+```{r}
+library(dplyr)
+library(ggplot2)
+H15_exons_data <- read.table('file_exon_affected_h15_flip.txt',sep=",")
+Unaffected <- as.numeric(H15_exons_data[1,])
+Affected <- as.numeric(H15_exons_data[2,])
+H15_exons_data <- data.frame(Unaffected,Affected)
+H15_exons_data <- H15_exons_data[-c(110:115,116:153,153:160,298:335),]
+smooth_unaff <- smooth.spline(H15_exons_data$Unaffected,nknots = 10)
+smooth_aff <- smooth.spline(H15_exons_data$Affected,nknots = 10)
+data_after_smooth <- data.frame(smooth_aff$y,smooth_unaff$y)
+colnames(data_after_smooth) <- c('Affected','Unaffected')
+len <- nrow(data_after_smooth)
+pos <- seq(from = 1, to = len, by = 1)
+data_after_smooth <- cbind(data_after_smooth,pos)
+total_days <- diff(range(data_after_smooth$pos))
+span <- 21/total_days
+
+fit_unaffected <- loess(data_after_smooth$Unaffected ~ pos, degree=1, span = span, data=data_after_smooth)
+fit_affected <- loess(data_after_smooth$Affected ~ pos, degree=1, span = span, data=data_after_smooth)
+colors <- c("Unaffected" = "deepskyblue", "Affected" = "navyblue")
+data_after_smooth %>% mutate(smooth_unaffected = fit_unaffected$fitted, smooth_affected = fit_affected$fitted) %>% ggplot(aes(pos, data_after_smooth$Unaffected)) + geom_line(aes(y = smooth_unaffected,color = "Unaffected"), size = 1.5) + geom_line(aes(y = smooth_affected,color = "Affected"), size = 1.5) + geom_vline(xintercept = 109, linetype = "longdash") + geom_vline(xintercept = 178, linetype = "longdash") + geom_vline(xintercept = 247, linetype = "longdash") + labs(x = "",
+         y = "H1.5 Coverage",
+         color = "") +
+    scale_color_manual(values = colors) + theme_bw() +  scale_x_continuous(breaks = NULL)
+
+
+# pdf("mean_plot_h15_cov.pdf")
+affected <- data.frame(H15_exons_data[,2])
+unaffected <- data.frame(H15_exons_data[,1])
+affected$Group <- as.factor('affected')
+names(affected)[1] <- 'Mean'
+unaffected$Group <- as.factor('unaffected')
+names(unaffected)[1] <- 'Mean'
+data_to_plot_affect <- rbind(affected,unaffected)
+compare_means(Mean ~ Group, data =  data_to_plot_affect)
+p <- ggboxplot(data_to_plot_affect, x = "Group", y = "Mean",
+          color = rev(c("Unaffected" = "deepskyblue", "Affected" = "navyblue")), ylab = "H1.5 Coverage") +
+  stat_compare_means(label = "p.signif",ref.group = "affected")
+p + rremove("x.text") + rremove("x.title")
+# print(p)
+# dev.off()
+```
+
+
+
+
+
+## Plots_introns - H1.2 - Endo(WT) unaffected vs affected
+
+
+```{r}
+H12_introns_data <- read.table("file_with_introns_affect_h12_flip.txt",sep=",")
+Unaffected <- as.numeric(H12_introns_data[1,])
+Affected <- as.numeric(H12_introns_data[2,])
+H12_introns_data <- data.frame(Unaffected,Affected)
+H12_introns_data <- H12_introns_data[-c(1:2,73:82,331:377, 448:500),]
+smooth_unaff <- smooth.spline(H12_introns_data$Unaffected,nknots = 4)
+smooth_aff <- smooth.spline(H12_introns_data$Affected,nknots = 4)
+data_after_smooth <- data.frame(smooth_aff$y,smooth_unaff$y)
+colnames(data_after_smooth) <- c('Affected','Unaffected')
+len <- nrow(data_after_smooth)
+pos <- seq(from = 1, to = len, by = 1)
+data_after_smooth <- cbind(data_after_smooth,pos)
+total_days <- diff(range(data_after_smooth$pos))
+span <- 21/total_days
+
+fit_unaffected <- loess(data_after_smooth$Unaffected ~ pos, degree=1, span = span, data=data_after_smooth)
+fit_affected <- loess(data_after_smooth$Affected ~ pos, degree=1, span = span, data=data_after_smooth)
+colors <- c("Unaffected" = "red1", "Affected" = "red4")
+data_after_smooth %>% mutate(smooth_unaffected = fit_unaffected$fitted, smooth_affected = fit_affected$fitted) %>% ggplot(aes(pos, data_after_smooth$Unaffected)) + geom_line(aes(y = smooth_unaffected,color = "Unaffected"), size = 1.5) + geom_line(aes(y = smooth_affected,color = "Affected"), size = 1.5) + geom_vline(xintercept = 70, linetype = "longdash") + geom_vline(xintercept = 200, linetype = "longdash") + geom_vline(xintercept = 330, linetype = "longdash") + labs(x = "",
+         y = "H1.2 Coverage",
+         color = "") +
+    scale_color_manual(values = colors) + theme_bw() +  scale_x_continuous(breaks = NULL)
+pdf("mean_plot_h12_intron_cov.pdf")
+affected <- data.frame(H12_introns_data[,2])
+unaffected <- data.frame(H12_introns_data[,1])
+affected$Group <- as.factor('affected')
+names(affected)[1] <- 'H1.2-Coverage'
+unaffected$Group <- as.factor('unaffected')
+names(unaffected)[1] <- 'H1.2-Coverage'
+data_to_plot_affect <- rbind(affected,unaffected)
+compare_means(`H1.2-Coverage` ~ Group, data =  data_to_plot_affect)
+p <- ggboxplot(data_to_plot_affect, x = "Group", y = "H1.2-Coverage",
+          color = rev(c("Unaffected" = "red1", "Affected" = "red4"))) +
+  stat_compare_means(label = "p.signif",ref.group = "unaffected")
+p + rremove("x.text") + rremove("x.title")
+
+print(p)
+dev.off()
+
+```
+
+
+## Plots_introns - H1.5 - Endo(WT) unaffected vs affected
+
+
+
+```{r}
+H15_introns_data <- read.table("file_with_introns_affect_h15_flip.txt",sep=",")
+Unaffected <- as.numeric(H15_introns_data[1,])
+Affected <- as.numeric(H15_introns_data[2,])
+H15_introns_data <- data.frame(Unaffected,Affected)
+H15_introns_data <- H15_introns_data[-c(1:2,73:82,331:377, 448:500),]
+smooth_unaff <- smooth.spline(H15_introns_data$Unaffected,nknots = 4)
+smooth_aff <- smooth.spline(H15_introns_data$Affected,nknots = 4)
+data_after_smooth <- data.frame(smooth_aff$y,smooth_unaff$y)
+colnames(data_after_smooth) <- c('Affected','Unaffected')
+len <- nrow(data_after_smooth)
+pos <- seq(from = 1, to = len, by = 1)
+data_after_smooth <- cbind(data_after_smooth,pos)
+total_days <- diff(range(data_after_smooth$pos))
+span <- 21/total_days
+
+fit_unaffected <- loess(data_after_smooth$Unaffected ~ pos, degree=1, span = span, data=data_after_smooth)
+fit_affected <- loess(data_after_smooth$Affected ~ pos, degree=1, span = span, data=data_after_smooth)
+colors <- c("Unaffected" = "red1", "Affected" = "red4")
+data_after_smooth %>% mutate(smooth_unaffected = fit_unaffected$fitted, smooth_affected = fit_affected$fitted) %>% ggplot(aes(pos, data_after_smooth$Unaffected)) + geom_line(aes(y = smooth_unaffected,color = "Unaffected"), size = 1.5) + geom_line(aes(y = smooth_affected,color = "Affected"), size = 1.5) + geom_vline(xintercept = 70, linetype = "longdash") + geom_vline(xintercept = 200, linetype = "longdash") + geom_vline(xintercept = 330, linetype = "longdash") + labs(x = "",
+         y = "H1.5 Coverage",
+         color = "") +
+    scale_color_manual(values = colors) + theme_bw() +  scale_x_continuous(breaks = NULL)
+
+pdf("mean_plot_h15_intron_cov.pdf")
+affected <- data.frame(H15_introns_data[,2])
+unaffected <- data.frame(H15_introns_data[,1])
+affected$Group <- as.factor('affected')
+names(affected)[1] <- 'H1.5-Coverage'
+unaffected$Group <- as.factor('unaffected')
+names(unaffected)[1] <- 'H1.5-Coverage'
+data_to_plot_affect <- rbind(affected,unaffected)
+compare_means(`H1.5-Coverage` ~ Group, data =  data_to_plot_affect)
+p <- ggboxplot(data_to_plot_affect, x = "Group", y = "H1.5-Coverage",
+          color = rev(c("Unaffected" = "red1", "Affected" = "red4"))) +
+  stat_compare_means(label = "p.signif",ref.group = "unaffected")
+p + rremove("x.text") + rremove("x.title")
+
+
+
+
+print(p)
+dev.off()
+
+
+```
+
+
+## Intron_len and exon_len - exons H1.2-1.5
+
+```{r}
+
+affected <- read.table("intron_len_affected_h12_exons.tab",header= TRUE,fill = TRUE)
+unaffected <- read.table("intron_len_unaffected_h12_exons.tab",header= TRUE,fill = TRUE)
+affected <- data.frame(affected[which(affected < 12000 & 2000 < affected),])
+unaffected <- data.frame(unaffected[which(unaffected < 12000 &  2000 < unaffected),])
+affected$Group <- as.factor('affected')
+names(affected)[1] <- 'length'
+unaffected$Group <- as.factor('unaffected')
+names(unaffected)[1] <- 'length'
+data_to_plot_affect <- rbind(affected,unaffected)
+compare_means(length ~ Group, data =  data_to_plot_affect, method = "t.test")
+# pdf("h12_exons_intron_len.pdf")
+p <- ggboxplot(data_to_plot_affect, x = "Group", y = "length",
+          color = rev(c("Unaffected" = "deepskyblue", "Affected" = "navyblue"))) +
+  stat_compare_means(label = "p.signif",ref.group = "unaffected")
+p + rremove("x.text") + rremove("x.title")
+# print(p)
+# dev.off()
+affected <- read.table("exon_len_affected_h12_exons.tab",header= TRUE,fill = TRUE)
+unaffected <- read.table("exon_len_unaffected_h12_exons.tab",header= TRUE,fill = TRUE)
+affected <- data.frame(affected[which(affected < 225),])
+unaffected <- data.frame(unaffected[which(unaffected < 225),])
+affected$Group <- as.factor('affected')
+names(affected)[1] <- 'length'
+unaffected$Group <- as.factor('unaffected')
+names(unaffected)[1] <- 'length'
+data_to_plot_affect <- rbind(affected,unaffected)
+compare_means(length ~ Group, data =  data_to_plot_affect, method = "t.test")
+pdf("h12_exons_exon_len.pdf")
+p <- ggboxplot(data_to_plot_affect, x = "Group", y = "length",
+          color = rev(c("Unaffected" = "deepskyblue", "Affected" = "navyblue"))) +
+  stat_compare_means(label = "p.signif",ref.group = "unaffected")
+p + rremove("x.text") + rremove("x.title")
+print(p)
+dev.off()
+```
+
+
+## Intron_len and exon_len - introns H1.2-H1.5
+
+
+
+```{r}
+affected <- read.table("len_affected_introns_int.tab",header= TRUE,fill = TRUE)
+unaffected <- read.table("len_unaffected_introns_int.tab",header= TRUE,fill = TRUE)
+affected <- data.frame(affected[which(affected < 9000 & 1000 < affected),])
+unaffected <- data.frame(unaffected[which(unaffected < 9000 &  1000 < unaffected),])
+affected$Group <- as.factor('affected')
+names(affected)[1] <- 'length'
+unaffected$Group <- as.factor('unaffected')
+names(unaffected)[1] <- 'length'
+data_to_plot_affect <- rbind(affected,unaffected)
+compare_means(length ~ Group, data =  data_to_plot_affect, method = "t.test")
+pdf("h12_introns_intron_len.pdf")
+p <- ggboxplot(data_to_plot_affect, x = "Group", y = "length",
+          color = rev(c("Unaffected" = "red1", "Affected" = "red4"))) +
+  stat_compare_means(label = "p.signif",ref.group = "unaffected")
+p + rremove("x.text") + rremove("x.title")
+print(p)
+dev.off()
+affected <- read.table("exon_len_affected_h12_introns.tab",header= TRUE,fill = TRUE)
+unaffected <- read.table("exon_len_unaffected_h12_introns.tab",header= TRUE,fill = TRUE)
+affected <- data.frame(affected[which(affected < 225),])
+unaffected <- data.frame(unaffected[which(unaffected < 225),])
+affected$Group <- as.factor('affected')
+names(affected)[1] <- 'length'
+unaffected$Group <- as.factor('unaffected')
+names(unaffected)[1] <- 'length'
+data_to_plot_affect <- rbind(affected,unaffected)
+compare_means(length ~ Group, data =  data_to_plot_affect, method = "t.test")
+pdf("h12_introns_exon_len.pdf")
+p <- ggboxplot(data_to_plot_affect, x = "Group", y = "length",
+          color = rev(c("Unaffected" = "red1", "Affected" = "red4"))) +
+  stat_compare_means(label = "p.signif",ref.group = "unaffected")
+p + rremove("x.text") + rremove("x.title")
+print(p)
+dev.off()
+```
+
+
+

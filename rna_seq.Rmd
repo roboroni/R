@@ -1,0 +1,456 @@
+---
+title: "RNA-seq"
+author: "Me"
+date: "24 10 2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r librarys}
+library(edgeR)
+library(sva)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r , echo=FALSE}
+x <- read.delim('only_counts.tab')
+x <- na.omit(x)
+x <- aggregate(. ~ NAME, x, sum)
+x <- x[apply(x[,-1], 1, function(x) !all(x==0)),]
+x$D_Both <- x$D_Both_2_1.Counts + x$D_Both_5_1.Counts
+x$D_GFP <- x$D_GFP_2_1.Counts + x$D_GFP_5_1.Counts
+x$R_Both <- x$R_Both_1_1.Counts + x$R_Both_2_1.Counts
+x$R_GFP <- x$R_GFP_1_1.Counts + x$R_GFP_2_1.Counts
+combat <- x[,10:13]
+combat <- combat[,c(2,4,1,3)]
+batch <- factor(c(1,2,1,2))
+group <- factor(c(1,1,2,2))
+modcombat<- as.data.frame(ComBat_seq(as.matrix(combat),batch=batch, group=NULL))
+modcombat <- data.frame(x['NAME'], modcombat)
+#names(modcombat)[1] <- "gene id"
+#names(modcombat)[2] <- "OV"
+#names(modcombat)[3] <- "CT"
+#names(modcombat)[4] <- "OV"
+#names(modcombat)[5] <- "CT"
+#samp2 <- modcombat[,-1]
+#rownames(samp2) <- modcombat[,1]
+#write.table(modcombat, "final.txt", append = FALSE, sep="\t",
+  #          row.names = TRUE, col.names = TRUE,quote=FALSE)
+#adjusted <- ComBat_seq(as.matrix(combat))
+#x <- x[, c(1,4,5,8,9,2,3,6,7)]
+#colnames(x) <- c("gene name","WT","WT","WT","WT","OV","OV","OV","OV")
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+y <- DGEList(counts=modcombat[,-1], genes=modcombat[,1], group = group)
+design <- model.matrix(~group)
+#norm_cpn <- removeBatchEffect(normalizeVSN(y), batch=batch, design=design)
+```
+
+
+```{r}
+keep <- filterByExpr(y)
+y <- y[keep,,keep.lib.sizes=FALSE]
+y <- calcNormFactors(y)
+y$samples
+```
+
+```{r}
+eff.lib.size <- y$samples$lib.size*y$samples$norm.factors
+normCounts <- cpm(y)
+pseudoNormCounts <- log2(normCounts + 1)
+boxplot(pseudoNormCounts, col="gray", las=3)
+plotMDS(pseudoNormCounts)
+```
+
+
+
+
+
+
+
+```{r}
+#bcv = 0.4
+y <- estimateGLMCommonDisp(y, design, verbose=TRUE)
+y <- estimateGLMTrendedDisp(y, design)
+y <- estimateGLMTagwiseDisp(y, design)
+#y <- estimateDisp(y)
+#et <- exactTest(y)
+
+```
+
+
+
+```{r}
+fit <- glmFit(y, design)
+et <- glmLRT(fit)
+res <- topTags(et,n=nrow(et$table))
+is.de <- decideTestsDGE(et)
+summary(is.de)
+res
+# write_delim(res$table,'all_genes.tab',delim = "\t",escape = "none")
+```
+
+
+
+
+
+```{r}
+isDE <- as.logical(is.de)
+DEnames <- rownames(y)[isDE]
+plotSmear(et, de.tags=DEnames)
+abline(h=c(-1,1), col="blue")
+```
+
+
+
+
+
+```{r}
+plotMDS(y, main="BCV distance")
+logCPM <- predFC(y, design=NULL)
+plotMDS(logCPM, main="logFC distance")
+```
+
+
+
+```{r}
+library(tidyverse)
+deg <- topTags(et, n = Inf, p = 0.05)$table
+up <- deg[deg$logFC > 0,]
+down <- deg[deg$logFC < 0,]
+head(up)
+head(down)
+write_delim(up,'upreg.tab',delim = "\t",escape = "none")
+write_delim(down,'downreg.tab',delim = "\t",escape = "none")
+```
+
+
+
+
+
+
+
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+take_genes_up <- cpm(y[rownames(up),],normalized.lib.sizes=TRUE, log=TRUE)
+take_genes_down <- cpm(y[rownames(down),],normalized.lib.sizes=TRUE, log=TRUE)
+#z <- cpm(y[rownames(total),],normalized.lib.sizes=TRUE, log=TRUE)
+z <- rbind(take_genes_up,take_genes_down)
+scaledata <- t(scale(t(z))) # Centers and scales data.
+scaledata <- scaledata[complete.cases(scaledata),]
+
+```
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+```{r}
+hc <- hclust(as.dist(1-cor(scaledata, method="spearman")), method="complete") # Clusters columns by Spearman correlation.
+TreeC = as.dendrogram(hc, method="average")
+plot(TreeC,
+     main = "Sample Clustering",
+     ylab = "Height")
+```
+
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+```{r}
+wss <- (nrow(scaledata)-1)*sum(apply(scaledata,2,var))
+for (i in 2:20) wss[i] <- sum(kmeans(scaledata,
+                                     centers=i)$withinss)
+plot(1:20, wss, type="b", xlab="Number of Clusters",
+     ylab="Within groups sum of squares")
+```
+
+
+```{r}
+library(cluster)
+sil <- rep(0, 20)
+#repeat k-means for 1:20 and extract silhouette:
+for(i in 2:20){
+  k1to20 <- kmeans(scaledata, centers = i, nstart = 25, iter.max = 20)
+  ss <- silhouette(k1to20$cluster, dist(scaledata))
+  sil[i] <- mean(ss[, 3])
+}
+
+# Plot the  average silhouette width
+plot(1:20, sil, type = "b", pch = 19, xlab = "Number of clusters k", ylab="Average silhouette width")
+abline(v = which.max(sil), lty = 2)
+```
+
+```{r}
+library(vegan)
+fit <- cascadeKM(scaledata, 1, 20, iter = 100)
+plot(fit, sortg = TRUE, grpmts.plot = TRUE)
+
+```
+
+```{r}
+set.seed(20)
+kClust <- kmeans(scaledata, centers=2, nstart = 1000, iter.max = 20)
+kClusters <- kClust$cluster
+# function to find centroid in cluster i
+clust.centroid = function(i, dat, clusters) {
+  ind = (clusters == i)
+  colMeans(dat[ind,])
+}
+kClustcentroids <- sapply(levels(factor(kClusters)), clust.centroid, scaledata, kClusters)
+```
+
+```{r}
+library(ggplot2)
+library(reshape)
+#get in long form for plotting
+Kmolten <- melt(kClustcentroids)
+colnames(Kmolten) <- c('sample','cluster','value')
+
+#plot
+p1 <- ggplot(Kmolten, aes(x=sample,y=value, group=cluster, colour=as.factor(cluster))) + 
+  geom_point() + 
+  geom_line() +
+  xlab("sample") +
+  ylab("Expression") +
+  labs(title= "Cluster Expression by sample",color = "Cluster")
+p1
+```
+
+
+```{r}
+library('ggfortify')
+autoplot(prcomp(scaledata), label=TRUE, label.size=4)
+```
+
+
+```{r}
+## Get some nicer colours
+library(RColorBrewer)
+library(gplots)
+mypalette <- brewer.pal(11,"RdYlBu")
+morecols <- colorRampPalette(mypalette)
+# Set up colour vector for celltype variable
+#col.cell <- c("purple","orange")[sampleinfo$CellType]
+
+# Plot the heatmap
+heatmap.2(scaledata,trace="none", main=" genes across samples",scale="row")
+```
+
+
+```{r}
+fig_data <- subset(down,genes == "TAF1" | genes == "RBFOX3" | genes == "OBSCN" | genes == "TAF1C")
+Biological_process <- c("Rho-pathway","Transcription-factor", "RNA-splicing","histone-modification")
+ggplot(data=fig_data, aes(x=genes, y=logFC, fill = Biological_process)) +
+geom_bar(stat="identity")+ scale_fill_manual(values=c("darkgreen",
+                             "blue",
+                             "red",
+                             "darkblue")) +
+coord_flip()
+```
+
+
+
+
+
+
+```{r}
+1 - phyper(2682,3091,(30000-2682),25825)
+1 - phyper(62,432,(30000-432),3091)
+1 - phyper(247,432,(30000-432),25825)
+1 - phyper(247,432,(30000-432),25825)
+```
+
+
+```{r}
+library("SuperExactTest")
+all_DGE <- read.delim("all_genes.txt",header = FALSE)[,1]
+AS_genes <- read.delim("AS_gene_name.tab",header = FALSE)[,1]
+ASD_genes <- read.delim("ASD_princton.txt",header = FALSE)[,1]
+x <- list(all_DGE,AS_genes,ASD_genes)
+obj <- supertest(x,n=30000)
+summary(obj)
+
+```
+
+
+
+
+```{r}
+genes_antology <- read.delim("gene_ant.tab",header = TRUE)
+genes_antology$PValue <- -log10(genes_antology$PValue)
+genes_antology$Term <- as.factor(genes_antology$Term)
+new_Data <- genes_antology[1:10,]
+levels(new_Data$Term)
+new_Data$Term <- factor(new_Data$Term,
+                                 levels=rev(levels(new_Data$Term)))
+ggplot(data=new_Data, aes(x=Term, y=PValue)) +
+geom_bar(stat="identity") + coord_flip()
+```
+
+
+
+```{r}
+splice_events <- c("IR","ES","ALT3","ALT5")
+splice_times <- c(82,38,2,5)
+splice_graph <- data.frame(splice_events,splice_times)
+ggplot(data=splice_graph, aes(x=splice_events, y=splice_times)) +
+geom_bar(stat="identity")
+splice_times_ASD <- c(2360,1336,427,360)
+sum <- sum(splice_times_ASD)
+total_splice_ASD_prec <- c((2360 / sum * 100),(1336 / sum * 100),(427 / sum * 100), (360 / sum * 100))
+splice_graph <- data.frame(splice_events,total_splice_ASD_prec)
+ggplot(data=splice_graph, aes(x=splice_events, y=total_splice_ASD_prec)) +
+geom_bar(stat="identity")
+splice_times_AS_dge <- c(2663,770,48,125)
+sum <- sum(splice_times_ASD)
+total_splice_ASD_prec <- c((2663 / sum * 100),(770 / sum * 100),(48 / sum * 100), (125 / sum * 100))
+splice_graph <- data.frame(splice_events,total_splice_ASD_prec)
+ggplot(data=splice_graph, aes(x=splice_events, y=total_splice_ASD_prec)) +
+geom_bar(stat="identity")
+```
+
+
+## OUTER GROUPS
+
+```{r}
+splice_times_outer1<- c(310,176,50,50)
+sum <- sum(splice_times_outer1)
+total_splice_outer_prec <- c((310 / sum * 100),(176 / sum * 100),(50 / sum * 100), (50 / sum * 100))
+splice_graph <- data.frame(splice_events,total_splice_outer_prec)
+ggplot(data=splice_graph, aes(x=splice_events, y=total_splice_outer_prec)) +
+geom_bar(stat="identity")
+splice_times_outer2<- c(79,691,131,112)
+sum <- sum(splice_times_outer2)
+total_splice_outer_prec <- c((79 / sum * 100),(691 / sum * 100),(131 / sum * 100), (112 / sum * 100))
+splice_graph <- data.frame(splice_events,total_splice_outer_prec)
+ggplot(data=splice_graph, aes(x=splice_events, y=total_splice_outer_prec)) +
+geom_bar(stat="identity")
+```
+
+
+
+
+
+
+
+
+```{r}
+total_splice_times <- c(2663,1502,476,408)
+sum_total <- sum(total_splice_times)
+sum_total
+total_splice_prec <- c((2663 / sum_total * 100),(1502 / sum_total * 100),(476 / sum_total * 100), (408 / sum_total * 100))
+splicing_events <- c(rep("IR" , 2) , rep("ES" , 2) , rep("ALT3" , 2),rep("ALT5" , 2))
+DATA_base <- rep(c("VastDB" , "RNA-seq") , 4)
+total_splice_times_vastDB <- c(193066,166336,171999,133437)
+sum_vastDB <- sum(total_splice_times_vastDB)
+sum_vastDB
+total_splice_prec_vastDB <- c((193066 / sum_vastDB * 100),(166336 / sum_vastDB * 100),(171999 / sum_vastDB * 100), (133437 / sum_vastDB * 100))
+percentage <- c(total_splice_prec_vastDB[1],total_splice_prec[1],total_splice_prec_vastDB[2],total_splice_prec[2],total_splice_prec_vastDB[3],total_splice_prec[3],total_splice_prec_vastDB[4],total_splice_prec[4])
+data <- data.frame(splicing_events,DATA_base,percentage)
+ggplot(data, aes(fill=DATA_base, y=percentage, x=splicing_events)) + 
+    geom_bar(position="dodge", stat="identity")
+```
+## stats analysis 
+
+```{r}
+predicted <- sum_total*total_splice_prec_vastDB
+observed <- sum_total*total_splice_prec
+log2_enrichment <- log2(observed / predicted)
+plot_log_data <- data.frame(log2_enrichment,splice_events)
+p <- ggplot(plot_log_data, aes(y=log2_enrichment, x=splice_events, fill=splice_events)) + 
+    geom_bar(stat="identity", width=1) + scale_fill_manual(values=c("ALT3" = "burlywood", "ALT5" = "darkorange", "ES" = "navyblue","IR" = "red2")) 
+IRp <- dhyper(2663,193066,(sum_vastDB-193066),sum_total) ; IRp
+EXp <- dhyper(1502,166336,(sum_vastDB-166336),sum_total) ; EXp
+ALT3P <- dhyper(476,171999,(sum_vastDB-171999),sum_total) ; ALT3P
+ALT5P <- dhyper(408,133437,(sum_vastDB-133437),sum_total) ; ALT5P
+label.df <- data.frame(Group = splice_events,
+                       Value = c(IRp, EXp,ALT3P,ALT5P))
+p + geom_text(data = label.df, label = "***",size = 7)
+## להוסיף כוכביות לגרף וצבע 
+```
+
+
+```{r}
+library(lessR)
+splice_event <- c("IR","IR-DGE","EX","EX-DGE","ALT3","ALT3-DGE","ALT5","ALT5-DGE")
+splice_counts <- c((2663-89),89, (1502-41),41, 473,3, 403,5)
+pct <- as.numeric(formatC(splice_counts/sum(splice_counts)*100,digits = 3, format = "f"))
+data1 <- data.frame(splice_event,pct)
+colors <- c("red2","palevioletred","navyblue","royalblue3","burlywood","salmon2","darkorange","orange")
+PieChart(splice_event, pct, fill = colors, values="input",data = data1, main = NULL)
+sum(pct)
+```
+
+
+```{r}
+labels <- c("Down","UP")
+values <- c(376,56)
+sum(values)
+#pct <- formatC(values/sum(values)*100,digits = 3, format = "f")
+#labels <- paste(labels, pct) # add percents to labels
+#labels <- paste(labels,"%",sep="") # ad % to labels
+dount <- data.frame(labels,values)
+PieChart(labels, values, data = dount,main = NULL)
+```
+
+
+```{r}
+splice_event <- c("IR","EX","ALT3","ALT5")
+splice_counts <- c(110334, 107799, 80693,71670)
+pct <- as.numeric(formatC(splice_counts/sum(splice_counts)*100,digits = 3, format = "f"))
+data1 <- data.frame(splice_event,pct)
+colors <- c("red2","navyblue","burlywood","darkorange")
+PieChart(splice_event, pct, fill = colors, values="input",data = data1, main = NULL)
+sum(pct)
+```
+

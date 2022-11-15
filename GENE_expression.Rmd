@@ -1,0 +1,185 @@
+---
+title: "Gene Expression correlation"
+author: "Me"
+date: "9 11 2022"
+output: html_document
+---
+
+
+## First of all, prepare the data for correlation, meaning we need to overlap the significant expressed genes
+## Across al samples 
+## Then split into groups of genes in chromsomes 
+
+```{r }
+library("tidyverse")
+genes_per_chr <- unique(read.delim("all_genes_per_chr")[c("chrom","name2")])
+genes_per_chr_no_underscore <- genes_per_chr[-grep("([a-zA-Z0-9])_.*", genes_per_chr$chrom),]
+colnames(genes_per_chr_no_underscore) <- c('Chrom','gene_name')
+histones_norm_data <- data.frame(normCounts_histones[,1],rowMeans(normCounts_histones[,c(2,3)]),rowMeans(normCounts_histones[,c(8,9)]),rowMeans(normCounts_histones[,c(12,13)]))
+colnames(histones_norm_data) <- c('gene_name','H1.2&H1.5','H1.5','H1.2')
+ASD_norm_data <- data.frame(normCounts_ASD[,1],rowMeans(normCounts_ASD[,c(6,7,14,15)]),rowMeans(normCounts_ASD[,c(8:13,16:18)]))
+colnames(ASD_norm_data) <- c('gene_name','No_ASD','ASD')
+Org_norm_data <- data.frame(normCounts_org[,1],rowMeans(normCounts_org[,c(3:10,12:18)]))
+colnames(Org_norm_data) <- c('gene_name','Organoids')
+# histones_data <- to_heatmap_foldchange
+# ASD_data <- to_heatmap_foldchange
+# organoids <- deg_org[,1:2]
+# colnames(organoids) <- c('gene_name','Organoids')
+# colnames(organoids)
+
+df_nor <- merge(x=histones_data,y=ASD_data,by="gene_name")
+df <- merge(x=df_nor,y=organoids,by="gene_name")
+df_norm_chr <- merge(x=df,y=genes_per_chr_no_underscore,by="gene_name")
+df_sign <- merge(x=df_norm_chr,y=df,by="gene_name")
+only_FD_Expr <- data.frame(df_sign[,1],df_sign[,9:14],df_sign[,8])
+colnames(only_FD_Expr) <- c('gene_name','H1.2','H1.5','H1.2&H1.5','No_ASD','ASD','Organoids','chrom')
+by_chr <- only_FD_Expr %>% group_by(chrom)
+chromosomes <- group_split(by_chr)
+
+
+library("psych")
+library(reshape2)
+library(ggplot2)
+# Get upper triangle of the correlation matrix
+  get_upper_tri <- function(cormat){
+    cormat[lower.tri(cormat)]<- NA
+    return(cormat)
+  }
+get_lower_tri<-function(cormat){
+    cormat[upper.tri(cormat)] <- NA
+    return(cormat)
+}
+
+
+
+  chr_data <- chromosomes[[1]]
+  row.names(chr_data) <- chr_data$gene_name
+  chr_data[1] <- NULL
+  chr_data <- chr_data[,-7]
+  p <- corr.test(chr_data,method = "pearson")
+  upper_tri <- get_upper_tri((p[["r"]]))
+  melted_cormat <- melt(upper_tri,na.rm = TRUE)
+  colnames(melted_cormat) <- c('Sample1','Sample2',"r")
+  upper_tri <- get_upper_tri(p[["p"]])
+  melted_cormat_pvalue <- melt(upper_tri,na.rm = TRUE)
+  colnames(melted_cormat_pvalue) <- c('Sample1','Sample2',"p")
+  
+  corr_matrix <- cbind(melted_cormat,melted_cormat_pvalue[3]) %>% mutate(sig_p = ifelse(p < .05, T, F), p_if_sig = ifelse(p <.05, p, NA), r_if_sig = ifelse(p <.05, r, NA))
+
+  
+  ggplot(data = corr_matrix, aes(Sample1, Sample2, fill=r, label=round(r_if_sig,2))) +
+geom_tile() +
+labs(x = NULL, y = NULL, fill = "Pearson's\nCorrelation", title=paste0("Correlations in Chr",1), subtitle="Only significant Pearson's correlation coefficients are shown") + scale_fill_gradient2(mid="#FBFEF9",low="#0C6291",high="#A63446",  midpoint = 0, space = "Lab", limits=c(-1,1)) +
+geom_text() +
+theme_classic() +
+scale_x_discrete(expand=c(0,0)) +
+scale_y_discrete(expand=c(0,0)) +
+theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+size = 12, hjust = 1)) +
+coord_fixed()
+list_corr <- c(list_corr,list(ht))
+counter = counter + 1
+  
+  
+
+function_corr_matrix <- function(chr_data){ 
+  row.names(chr_data) <- chr_data$gene_name
+  chr_data[1] <- NULL
+  chr_data <- chr_data[,-7]
+  p <- corr.test(chr_data,method = "pearson")
+  upper_tri <- get_upper_tri((p[["r"]]))
+  melted_cormat <- melt(upper_tri,na.rm = TRUE)
+  colnames(melted_cormat) <- c('Sample1','Sample2',"r")
+  upper_tri <- get_upper_tri(p[["p"]])
+  melted_cormat_pvalue <- melt(upper_tri,na.rm = TRUE)
+  colnames(melted_cormat_pvalue) <- c('Sample1','Sample2',"p")
+  
+  corr_matrix <- cbind(melted_cormat,melted_cormat_pvalue[3]) %>% mutate(sig_p = ifelse(p < .05, T, F), p_if_sig = ifelse(p <.05, p, NA), r_if_sig = ifelse(r <.05, r, NA))
+  return(corr_matrix)
+
+
+}
+
+
+
+
+# ht <- ggplot(data = corr_matrix, aes(Sample1, Sample2, fill=r, label=round(r_if_sig,2))) +
+#   geom_tile() +
+#   labs(x = NULL, y = NULL, fill = "Pearson's\nCorrelation", title=paste0("Correlations in Chr",counter), subtitle="Only significant Pearson's correlation coefficients are shown") + scale_fill_gradient2(mid="#FBFEF9",low="#0C6291",high="#A63446",  midpoint = 0, space = "Lab", limits=c(-1,1)) +
+#  geom_text() +
+#  theme_classic() +
+#  scale_x_discrete(expand=c(0,0)) +
+#  scale_y_discrete(expand=c(0,0)) +
+#  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+#     size = 12, hjust = 1)) +
+#  coord_fixed()
+#   list_corr <- c(list_corr,list(ht))
+#   counter = counter + 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# upper_tri <- get_upper_tri(list_corr[[1]][["r"]])
+# upper_tri
+# melted_cormat <- melt(upper_tri,na.rm = TRUE)
+# colnames(melted_cormat) <- c('Sample1','Sample2',"r")
+# upper_tri <- get_upper_tri(list_corr[[1]][["p"]])
+# upper_tri
+# melted_cormat_pvalue <- melt(upper_tri,na.rm = TRUE)
+# colnames(melted_cormat_pvalue) <- c('Sample1','Sample2',"p")
+# corr_matrix <- cbind(melted_cormat,melted_cormat_pvalue[3]) %>%
+#  mutate(sig_p = ifelse(p < .05, T, F), p_if_sig = ifelse(p <.05, p, NA), r_if_sig = ifelse(r <.05, r, NA))
+# library(ggplot2)
+# # ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+# #   geom_tile() + scale_fill_gradient2(midpoint=mean(melted_cormat$value), low="blue", mid="white",
+# #                      high="red", space ="Lab" )
+# 
+# 
+# 
+
+
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r}
+
+
+list_corr = list()
+for (i in 1:24) {
+  corr_chr <- data.frame(chromosomes[[i]])
+  check_corr <- function_corr_matrix(corr_chr)
+  ht <- ggplot(data = check_corr, aes(Sample1, Sample2, fill=r, label=round(r_if_sig,2))) +
+  geom_tile() +
+  labs(x = NULL, y = NULL, fill = "Pearson's\nCorrelation", title=paste0("Correlations in Chr",i), subtitle="Only significant Pearson's correlation coefficients are shown") + scale_fill_gradient2(mid="#FBFEF9",low="#0C6291",high="#A63446",  midpoint = 0, space = "Lab", limits=c(-1,1)) +
+ geom_text() +
+ theme_classic() +
+ scale_x_discrete(expand=c(0,0)) +
+ scale_y_discrete(expand=c(0,0)) +
+ theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+    size = 12, hjust = 1)) +
+ coord_fixed()
+  list_corr <- c(list_corr,list(ht))
+}
+
+
+list_corr[[4]]
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,113 @@
+---
+title: "ML samples to ASD/NO-ASD"
+author: "Me"
+date: "9 11 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r ASD/NO-ASD}
+library("tidyverse")
+library("reshape2")
+library("ggplot2")
+library("dplyr")
+library("edgeR")
+
+
+data <- read.delim("COUNTS-hg38-23-asd.tab")
+
+#Adding matching prefixes to columns names accroding to the cohort they came from("ASD","No ASD" or "Control)
+data %>% rename_with(~paste0("ASD_", .), c("SRR11015324_1","SRR11015325_1","SRR11015326_1","SRR11015329_1","SRR11015311_1","SRR11015312_1","SRR11015313_1","SRR11015335_1","SRR11015336_1","SRR11015337_1")) -> data
+data %>% rename_with(~paste0("No_asd_", .), c("SRR11015308_1","SRR11015309_1","SRR11015327_1")) -> data
+data %>% rename_with(~paste0("Control_", .), c("SRR11015303_1","SRR11015304_1","SRR11015305_1",
+                                                  "SRR11015306_1","SRR11015307_1","SRR11015347_1","SRR11015348_1",
+                                                      "SRR11015349_1","SRR11015350_1","SRR11015351_1")) -> data
+data_to_check_del3 <- read.delim("Del3_file.txt",sep = "") %>% rename_with(~paste0("Del3_", .), names(data_to_check_del3)) -> data_to_check_del3
+data_to_check_del7 <- read.delim("All_del7.txt",sep = "") %>% rename_with(~paste0("Del7_", .), names(data_to_check_del7)) -> data_to_check_del7
+
+ASD_colums <- data[grep("ASD_SRR", names(data))]
+no_ASD_colums <- data[grep("No_asd", names(data))]
+All_data <- data.frame(cbind(data[,c(1,2)],ASD_colums,no_ASD_colums,data_to_check_del3,data_to_check_del7))
+
+All_data <- na.omit(All_data)
+All_data <- aggregate(. ~ NAME, All_data[,-1], sum)
+All_data <- All_data[apply(All_data[,c(-1,-2)], 1, function(x) !all(x==0)),]
+
+colnames(All_data) <- c("gene_name","ASD1","ASD2","ASD3","ASD4","ASD5","ASD6","ASD7","ASD8","ASD9","ASD10",
+                    "No_ASD1","No_ASD2","No_ASD3",
+                    "DEL3_1","DEL3_2","DEL7_1","DEL7_2","DEL7_3")
+
+### remove asd 1,2,3 and 7
+group <- factor(c(1,1,1,1,1,1,2,2,2,3,3,3,3,3))
+library(sva)
+batch <- factor(c(1,1,1,1,3,3,4,1,4,2,2,3,2,2))
+modcombat <- as.data.frame(ComBat_seq(as.matrix(All_data[,c(-1,-2,-3,-4,-8)]),batch=batch, group = group))
+#Creating DGEList object
+y <- DGEList(counts=modcombat, genes=All_data[,1], group = group)
+design <- model.matrix(~group)
+keep <- filterByExpr(y)
+y <- y[keep,,keep.lib.sizes=FALSE]
+y <- calcNormFactors(y, method = "TMM")
+y$samples
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r plots}
+#Calculating library size
+eff.lib.size <- y$samples$lib.size * y$samples$norm.factors
+#Extracting normalized counts
+normCounts <- cpm(y)
+pseudoNormCounts <- log2(normCounts + 1)
+#Plotting box plot
+boxplot(pseudoNormCounts, col="gray", las=3)
+#Plotting MDS plot + legend
+plotMDS(pseudoNormCounts,col=as.numeric(group))
+legend("topleft", as.character(unique(group)),col=1:3, pch=20)
+```
+
+```{r}
+## Hiearchical clustering
+d=dist(t(normCounts))
+hc=hclust(d,method="complete")
+plot(hc)
+
+## 
+set.seed(101)
+
+# we have to transpore the matrix t()
+# so that we calculate distances between patients
+kclu=kmeans(t(normCounts),centers=2)  
+
+# number of data points in each cluster
+table(kclu$cluster)
+
+
+kmclu=cluster::pam(t(normCounts),k=2) #  cluster using k-medoids
+
+dists=dist(t(normCounts))
+
+# calculate MDS
+mds=cmdscale(dists)
+
+# plot the patients in the 2D space
+plot(mds,pch=19,col=rainbow(2)[kclu$cluster])
+
+legend("bottomright",
+       legend=paste("clu",unique(kclu$cluster)),
+       fill=rainbow(2)[unique(kclu$cluster)],
+       border=NA,box.col=NA)
+```
+

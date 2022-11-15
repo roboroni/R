@@ -1,0 +1,242 @@
+---
+title: "ASD_splicing"
+author: "Me"
+date: "23 5 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+library("SuperExactTest")
+library(dplyr)
+library("ggvenn")
+library(tidyverse)
+library(biomaRt)
+splicing_h12h15 <- read.delim("only_event_gene_name_H12-15.tab", header = TRUE)
+splicing_asd <- read.delim("only_event_gene_name_ASDvsControl.tab", header = TRUE)
+splicing_no_asd <- read.delim("only_event_gene_name_no_ASDvsControl.tab", header = TRUE)
+splicing_H12 <- read.delim("only_event_gene_name_h12.tab", header = TRUE)
+splicing_H15 <- read.delim("only_event_gene_name_h15.tab", header = TRUE)
+## removing overlap of overexpresiion and ASD, leaving only induced deletion and both overexpression effects
+splicing_h12h15 <- anti_join(splicing_h12h15,splicing_H12,"EVENT")
+splicing_h12h15 <- anti_join(splicing_h12h15,splicing_H15,"EVENT")
+splicing_H12 <- anti_join(splicing_H12, splicing_h12h15, "EVENT")
+splicing_H15 <- anti_join(splicing_H15, splicing_h12h15, "EVENT")
+splicing_del <- anti_join(splicing_no_asd,splicing_asd,"EVENT")
+# write_delim(splicing_h12h15,'splicing_H12&H15.tab',delim = "\t",escape = "none")
+# unique(splicing_H12$EVENT), unique(splicing_H15$EVENT), unique(splicing__no_asd$EVENT)
+x <- list(unique(splicing_asd$EVENT), unique(splicing_del$EVENT),unique(splicing_h12h15$EVENT))
+ obj <- supertest(x,n=722576)
+ splicing_coding <- summary(obj)$Table
+ Venn <-list('ASD'=unique(splicing_asd$GENE),'H1.5&H1.2-OV' = unique(splicing_H12$GENE))
+ ggvenn(Venn)
+ ## 31 in Elemetns
+ joint_splicing <- unlist(strsplit(splicing_coding$Elements[7], "\\,"))
+ joint_splicing <- str_replace_all(string=joint_splicing, pattern=" ", repl="")
+ joint_splicing <- joint_splicing[-1]
+ full_info <- splicing_h12h15[splicing_h12h15$EVENT %in% joint_splicing,]
+write.table(full_info[,1], file = "genes_antology_splicing_asd_h12-15.tab", quote = FALSE, sep = "\t",
+              row.names = FALSE)
+check_genes <- full_info$GENE
+
+ check <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = check_genes,
+  uniqueRows=TRUE)
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r}
+splicing_genes <- heatmap_genes[heatmap_genes$gene_name %in% full_info$GENE,]
+row.names(splicing_genes) <- splicing_genes$gene_name
+splicing_genes[1] <- NULL
+scaled_genes_splice <- data.frame(scale(splicing_genes))
+
+Heatmap(as.matrix(scaled_genes_splice),name = "Z score (Log FC Gene Expression)", heatmap_legend_param = list(title_gp = gpar(fontsize = 6), legend_direction = "horizontal"),
+        column_title = "", row_title = "",
+        row_names_gp = gpar(fontsize = 6), column_names_gp =  gpar(fontsize = 6), width = unit(3, "cm"), column_km = 2, column_km_repeats = 1000, row_km = 5, row_km_repeats = 1000, col = colorRamp2(c(min(as.matrix(scaled_genes_splice)), 0,max(as.matrix(scaled_genes_splice))),c("blue","white", "red")))
+```
+
+
+
+## intersection of splicing and TF- Yael
+```{r}
+TF_down <-  read.csv("TFs_down_regulation_data.csv")
+TF_up <-  read.csv("TFs_up_regulation_data.csv")
+SF_exon <- read.csv("Significant SF - Exon skipping events.csv")
+SF_alt3 <- c()
+SF_alt5 <- read.csv("Significant SF - alt5 data.csv")
+x <- list(unique(TF_down$TF), unique(TF_up$TF), unique(SF_alt3$SF))
+ obj <- supertest(x,n=30000)
+ splicing_coding <- summary(obj)$Table
+ 
+library("XML")
+library("methods")
+ 
+# xmldataframe <- xmlToDataFrame("alt3 input.xml")
+# alt3_all_genes <- as.character(xmldataframe[3,1])
+alt3 <- c("H4C1","APP","SRPK2","YBX1","VCAM1","SNRPA1","CDK2","LRRK2","LMNA","PARP1","ESR1","CCNE1","CUL3")
+
+# xmldataframe <- xmlToDataFrame("alt5 input.xml")
+# alt5_all_genes <- as.character(xmldataframe[3,1])
+alt5 <- c("H4C1","APP","SRPK2","YBX1","SF3B3","NCBP3","CDK2","LRRK2","LMNA","VCAM1")
+exon_skipping <- c("SUGP2","MATR3","YBX1","HNRNPL","HNRNPD","APP","QKI","HNRNPF","VCAM1","HNRNPM")
+down_reg <- c("HNF4A","SREBF2","SREBF1","LMNA","H4C1","NCOR2","PPARD")
+up_reg <- read.csv("UPREG_GENES.csv")[,4][c(-1,-2)]
+x <- list(unique(alt5), unique(alt3), unique(exon_skipping),unique(down_reg),unique(up_reg))
+ obj <- supertest(x,n=30000)
+ splicing_coding <- summary(obj)$Table
+```
+
+
+
+
+
+## Splicing for poster
+
+```{r}
+splicing_h12h15 <- anti_join(splicing_h12h15,splicing_H12,"EVENT")
+splicing_h12h15 <- anti_join(splicing_h12h15,splicing_H15,"EVENT")
+splicing_H12 <- anti_join(splicing_H12, splicing_h12h15, "EVENT")
+splicing_H15 <- anti_join(splicing_H15, splicing_h12h15, "EVENT")
+
+diff_table_both <-  read.delim("DiffAS-hg38-both.tab", header = TRUE)
+diff_table_h12 <-  read.delim("DiffAS-hg38-h12.tab", header = TRUE)
+diff_table_h15 <-  read.delim("DiffAS-hg38-h15.tab", header = TRUE)
+
+diff_table_both <- diff_table_both[diff_table_both$EVENT %in% splicing_h12h15$EVENT,]
+diff_table_h12 <- diff_table_h12[diff_table_h12$EVENT %in% splicing_H12$EVENT,]
+diff_table_h15 <- diff_table_h15[diff_table_h15$EVENT %in% splicing_H15$EVENT,]
+
+diff_table_both_EXON <- diff_table_both %>% filter(grepl("EX", EVENT))
+diff_table_both_INT <- diff_table_both %>% filter(grepl("INT", EVENT))
+diff_table_h12_EXON <- diff_table_h12 %>% filter(grepl("EX", EVENT))
+diff_table_h12_INT <- diff_table_h12 %>% filter(grepl("INT", EVENT))
+diff_table_h15_EXON <- diff_table_h15 %>% filter(grepl("EX", EVENT))
+diff_table_h15_INT <- diff_table_h15 %>% filter(grepl("INT", EVENT))
+
+write_delim(diff_table_both_EXON,'table_exons_only_both.tab',delim = "\t",escape = "none")
+write_delim(diff_table_both_INT,'table_introns_only_both.tab',delim = "\t",escape = "none")
+write_delim(diff_table_h12_EXON,'table_exons_only_h12.tab',delim = "\t",escape = "none")
+write_delim(diff_table_h12_INT,'table_introns_only_h12.tab',delim = "\t",escape = "none")
+write_delim(diff_table_h15_EXON,'table_exons_only_h15.tab',delim = "\t",escape = "none")
+write_delim(diff_table_h15_INT,'table_introns_only_h15.tab',delim = "\t",escape = "none")
+```
+
+
+
+
+
+## splicing patterns psi or delta-psi and maybe expresssion
+```{r}
+splicing_h12h15 <- anti_join(splicing_h12h15,splicing_H12,"EVENT")
+splicing_h12h15 <- anti_join(splicing_h12h15,splicing_H15,"EVENT")
+splicing_H12 <- anti_join(splicing_H12, splicing_h12h15, "EVENT")
+splicing_H15 <- anti_join(splicing_H15, splicing_h12h15, "EVENT")
+splicing_asd <- read.delim("only_event_gene_name_ASDvsControl.tab", header = TRUE)
+splicing_no_asd <- read.delim("only_event_gene_name_no_ASDvsControl.tab", header = TRUE)
+
+
+diff_table_both <-  read.delim("DiffAS-hg38-both.tab", header = TRUE)
+diff_table_h12 <-  read.delim("DiffAS-hg38-h12.tab", header = TRUE)
+diff_table_h15 <-  read.delim("DiffAS-hg38-h15.tab", header = TRUE)
+diff_table_ASD <-  read.delim("DiffAS-hg38-ASD.tab", header = TRUE)
+diff_table_NO_ASD <-  read.delim("DiffAS-hg38-no-ASD.tab", header = TRUE)
+
+
+
+diff_table_both <- diff_table_both[diff_table_both$EVENT %in% splicing_h12h15$EVENT,]
+diff_table_h12 <- diff_table_h12[diff_table_h12$EVENT %in% splicing_H12$EVENT,]
+diff_table_h15 <- diff_table_h15[diff_table_h15$EVENT %in% splicing_H15$EVENT,]
+
+diff_table_both_exon_intron <- diff_table_both %>% filter(grepl("EX|INT", EVENT))
+diff_table_h12_exon_intron <- diff_table_h12 %>% filter(grepl("EX|INT", EVENT))
+diff_table_h15_exon_intron <- diff_table_h15 %>% filter(grepl("EX|INT", EVENT))
+
+## combined ov
+x <- list(unique(diff_table_both_exon_intron$EVENT), unique(diff_table_ASD$EVENT),unique(diff_table_NO_ASD$EVENT))
+ obj <- supertest(x,n=722576)
+ splicing_set_both <- summary(obj)$Table
+ 
+## H1.2 ov
+x <- list(unique(diff_table_h12_exon_intron$EVENT), unique(diff_table_ASD$EVENT),unique(diff_table_NO_ASD$EVENT))
+ obj <- supertest(x,n=722576)
+ splicing_set_h12 <- summary(obj)$Table
+
+## H1.5 ov
+ x <- list(unique(diff_table_h15_exon_intron$EVENT), unique(diff_table_ASD$EVENT),unique(diff_table_NO_ASD$EVENT))
+ obj <- supertest(x,n=722576)
+ splicing_set_h15 <- summary(obj)$Table
+
+## All ov
+ x <- list(unique(diff_table_ASD$EVENT),unique(diff_table_NO_ASD$EVENT),unique(diff_table_both_exon_intron$EVENT), 
+           unique(diff_table_h12_exon_intron$EVENT), unique(diff_table_h15_exon_intron$EVENT))
+ obj <- supertest(x,n=722576)
+ splicing_set_all <- summary(obj)$Table
+
+ 
+## compare delta psi between two
+ joint_splicing_ASD <- unlist(strsplit(splicing_set_h15$Elements[6], "\\,"))
+ joint_splicing_ASD <- str_replace_all(string=joint_splicing_ASD, pattern=" ", repl="")
+ both_psi_asd <- data.frame(cbind(diff_table_both_exon_intron[diff_table_both_exon_intron$EVENT %in% joint_splicing_ASD,]$EVENT,diff_table_both_exon_intron[diff_table_both_exon_intron$EVENT %in% joint_splicing_ASD,]$dPSI,diff_table_NO_ASD[diff_table_NO_ASD$EVENT %in% joint_splicing_ASD,]$dPSI))
+colnames(both_psi_asd) <- c("event_name","combined_dPSI","ASD_dPSI")
+row.names(both_psi_asd) <- both_psi_asd$event_name
+both_psi_asd[2:3] <- data.frame(lapply(both_psi_asd[2:3],as.numeric))
+both_psi_asd[1] <- NULL
+
+
+##  column_km = 2, column_km_repeats = 1000, row_km = 5, row_km_repeats = 1000, 
+Heatmap(as.matrix(both_psi_asd),name = "dPSI", heatmap_legend_param = list(title_gp = gpar(fontsize = 6), legend_direction = "horizontal"),
+        column_title = "", row_title = "",
+        row_names_gp = gpar(fontsize = 6), column_names_gp =  gpar(fontsize = 6), width = unit(3, "cm"),col = colorRamp2(c(min(as.matrix(both_psi_asd)), 0,max(as.matrix(both_psi_asd))),c("blue","white", "red")))
+
+
+
+## compare delta psi between 3 
+ joint_splicing_ASD <- unlist(strsplit(splicing_set_both$Elements[7], "\\,"))
+ joint_splicing_ASD <- str_replace_all(string=joint_splicing_ASD, pattern=" ", repl="")
+ both_psi_asd <- data.frame(cbind(diff_table_both_exon_intron[diff_table_both_exon_intron$EVENT %in% joint_splicing_ASD,]$EVENT,diff_table_both_exon_intron[diff_table_both_exon_intron$EVENT %in% joint_splicing_ASD,]$dPSI,diff_table_NO_ASD[diff_table_NO_ASD$EVENT %in% joint_splicing_ASD,]$dPSI), diff_table_ASD[diff_table_ASD$EVENT %in% joint_splicing_ASD,]$dPSI)
+colnames(both_psi_asd) <- c("event_name","combined_dPSI","no_ASD_dPSI","ASD_dPSI")
+row.names(both_psi_asd) <- both_psi_asd$event_name
+both_psi_asd[2:4] <- data.frame(lapply(both_psi_asd[2:4],as.numeric))
+both_psi_asd[1] <- NULL
+
+##  column_km = 2, column_km_repeats = 1000, row_km = 5, row_km_repeats = 1000, 
+Heatmap(as.matrix(both_psi_asd),name = "dPSI", heatmap_legend_param = list(title_gp = gpar(fontsize = 6), legend_direction = "horizontal"),
+        column_title = "", row_title = "",
+        row_names_gp = gpar(fontsize = 6), column_names_gp =  gpar(fontsize = 6), width = unit(3, "cm"),col = colorRamp2(c(min(as.matrix(both_psi_asd)), 0,max(as.matrix(both_psi_asd))),c("blue","white", "red")))
+
+
+## expression by gene name
+gene_name_both_psi_asd <- diff_table_h15_exon_intron[diff_table_h15_exon_intron$EVENT %in% joint_splicing_ASD,]
+splicing_genes <- heatmap_genes[heatmap_genes$gene_name %in% gene_name_both_psi_asd$GENE,]
+row.names(splicing_genes) <- splicing_genes$gene_name
+splicing_genes[1] <- NULL
+
+scaled_genes_splice <- data.frame(scale(splicing_genes))
+
+Heatmap(as.matrix(scaled_genes_splice),name = "Z score (Log FC Gene Expression)", heatmap_legend_param = list(title_gp = gpar(fontsize = 6), legend_direction = "horizontal"),
+        column_title = "", row_title = "",
+        row_names_gp = gpar(fontsize = 6), column_names_gp =  gpar(fontsize = 6), width = unit(3, "cm"), column_km = 2, column_km_repeats = 1000, row_km = 5, row_km_repeats = 1000, col = colorRamp2(c(min(as.matrix(scaled_genes_splice)), 0,max(as.matrix(scaled_genes_splice))),c("blue","white", "red")))
+```
+
+

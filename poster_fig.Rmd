@@ -1,0 +1,39 @@
+---
+title: "poster_figures"
+author: "Me"
+date: "27 6 2022"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+control_exons_data <- as.numeric(read.table('exons_control.txt',sep=","))
+both_exons_data <- as.numeric(read.table('file_exon_both.txt',sep=","))
+h12_exons_data <- as.numeric(read.table('file_exon_h12.txt',sep=","))
+h15_exons_data <- as.numeric(read.table('file_exon_h15.txt',sep=","))
+data <- data.frame(control_exons_data,both_exons_data,h12_exons_data,h15_exons_data)
+data <- data[-c(110:115,116:153,153:160,298:335),]
+smooth_unaff <- smooth.spline(data$,nknots = 10)
+smooth_aff <- smooth.spline(H12_exons_data$Affected,nknots = 10)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

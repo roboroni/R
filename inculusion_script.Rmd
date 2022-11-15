@@ -1,0 +1,455 @@
+---
+title: "Inculsion_table"
+author: "Me"
+date: "13 9 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## check all splicing events across samples
+
+
+
+```{r}
+library(tidyverse)
+table_asd <- read.delim("inculsion_table/INCLUSION_LEVELS_FULL-hg38-asd.tab", header = TRUE)
+table_del <- read.delim("INCLUSION_LEVELS_FULL-deletion.tab", header = TRUE)
+table_both <- read.delim("inculsion_table/INCLUSION_LEVELS_FULL-hg38-both.tab", header = TRUE)
+table_h12 <- read.delim("inculsion_table/INCLUSION_LEVELS_FULL-hg38-h1.2.tab", header = TRUE)
+table_h15 <- read.delim("inculsion_table/INCLUSION_LEVELS_FULL-hg38-h1.5.tab", header = TRUE)
+
+# compare between all samples
+table_both_DEL <- inner_join(table_both,table_asd)
+table_both_DEL_H12 <- inner_join(table_both_DEL,table_h12)
+table_both_DEL_H12_H15 <- inner_join(table_both_DEL_H12,table_h15)
+table_both_DEL_H12_H15<- table_both_DEL_H12_H15 %>%
+  drop_na()
+
+## compare Del
+# table_asd_DEL <- inner_join(table_asd,table_del,by = "EVENT")
+# table_asd_DEL<- table_asd_DEL %>% drop_na()
+
+table_Exon <- table_both_DEL_H12_H15 %>% filter(grepl("EX", EVENT))
+table_intron <- table_both_DEL_H12_H15 %>% filter(grepl("INT", EVENT))
+# gene_splicing_event <- unique(table_Exon$GENE)
+# splicing_genes <- heatmap_genes[heatmap_genes$gene_name %in% gene_splicing_event,]
+# colnames(splicing_genes)[1] <- "GENE"
+# table_exon_expr_spl <- inner_join(table_Exon,splicing_genes, by = "GENE")
+
+## by means and medians EXONS/INTRONS
+dPSI_del <- data.frame(table_Exon$Del - table_Exon$Control.y)
+names(dPSI_del)[1] <- 'dPSI'
+dPSI_del_AF <- data.frame(dPSI_del[which(dPSI_del$dPSI < -15 | dPSI_del$dPSI > 15 ), ])
+dPSI_del_CO <- data.frame(dPSI_del[which(dPSI_del$dPSI > -15 & dPSI_del$dPSI < 15 ), ])
+dPSI_del_AF$Sample <- as.factor('Organoids')
+dPSI_del_CO$Sample <- as.factor('Organoids')
+# dPSI_asd <- rbind(dPSI_asd_AF,dPSI_asd_CO)
+# dPSI_asd$group <- as.factor('ASD')
+names(dPSI_del_CO)[1] <- 'dPSI'
+names(dPSI_del_AF)[1] <- 'dPSI'
+
+
+dPSI_no_asd <- data.frame(table_intron$no_ASD - table_intron$Control)
+names(dPSI_no_asd)[1] <- 'dPSI'
+dPSI_no_asd_AF <- data.frame(dPSI_no_asd[which(dPSI_no_asd$dPSI < -15 | dPSI_no_asd$dPSI > 15 ), ])
+dPSI_no_asd_CO <- data.frame(dPSI_no_asd[which(dPSI_no_asd$dPSI > -15 & dPSI_no_asd$dPSI < 15 ), ])
+dPSI_no_asd_AF$Sample <- as.factor('no_ASD')
+dPSI_no_asd_CO$Sample <- as.factor('no_ASD')
+# dPSI_no_asd <- rbind(dPSI_no_asd_AF,dPSI_no_asd_CO)
+# dPSI_no_asd$group <- as.factor('no_ASD')
+names(dPSI_no_asd_CO)[1] <- 'dPSI'
+names(dPSI_no_asd_AF)[1] <- 'dPSI'
+
+
+
+dPSI_asd <- data.frame(table_intron$ASD - table_intron$Control)
+names(dPSI_asd)[1] <- 'dPSI'
+dPSI_asd_AF <- data.frame(dPSI_asd[which(dPSI_asd$dPSI < -15 | dPSI_asd$dPSI > 15 ), ])
+dPSI_asd_CO <- data.frame(dPSI_asd[which(dPSI_asd$dPSI > -15 & dPSI_asd$dPSI < 15 ), ])
+dPSI_asd_AF$Sample <- as.factor('ASD')
+dPSI_asd_CO$Sample <- as.factor('ASD')
+# dPSI_no_asd <- rbind(dPSI_no_asd_AF,dPSI_no_asd_CO)
+# dPSI_no_asd$group <- as.factor('no_ASD')
+names(dPSI_asd_AF)[1] <- 'dPSI'
+names(dPSI_asd_CO)[1] <- 'dPSI'
+
+
+dPSI_H12 <- data.frame(table_intron$H1.2 - table_intron$GFP)
+names(dPSI_H12)[1] <- 'dPSI'
+dPSI_H12_AF <- data.frame(dPSI_H12[which(dPSI_H12$dPSI < -15 | dPSI_H12$dPSI > 15 ), ])
+dPSI_H12_CO <- data.frame(dPSI_H12[which(dPSI_H12$dPSI > -15 & dPSI_H12$dPSI < 15 ), ])
+dPSI_H12_AF$Sample <- as.factor('H12')
+dPSI_H12_CO$Sample <- as.factor('H12')
+# dPSI_H12 <- rbind(dPSI_H12_AF,dPSI_H12_CO)
+# dPSI_H12$group <- as.factor('H12')
+names(dPSI_H12_CO)[1] <- 'dPSI'
+names(dPSI_H12_AF)[1] <- 'dPSI'
+
+dPSI_H15 <- data.frame(table_intron$H1.5 - table_intron$GFP)
+names(dPSI_H15)[1] <- 'dPSI'
+dPSI_H15_AF <- data.frame(dPSI_H15[which(dPSI_H15$dPSI < -15 | dPSI_H15$dPSI > 15 ), ])
+dPSI_H15_CO <- data.frame(dPSI_H15[which(dPSI_H15$dPSI > -15 & dPSI_H15$dPSI < 15 ), ])
+dPSI_H15_AF$Sample <- as.factor('H15')
+dPSI_H15_CO$Sample <- as.factor('H15')
+# dPSI_H15 <- rbind(dPSI_H15_AF,dPSI_H15_CO)
+# dPSI_H15$group <- as.factor('H15')
+names(dPSI_H15_CO)[1] <- 'dPSI'
+names(dPSI_H15_AF)[1] <- 'dPSI'
+
+dPSI_both <- data.frame(table_intron$D_R_Both - table_intron$D_R_GFP)
+names(dPSI_both)[1] <- 'dPSI'
+dPSI_both_AF <- data.frame(dPSI_both[which(dPSI_both$dPSI < -15 | dPSI_both$dPSI > 15 ), ])
+dPSI_both_CO <- data.frame(dPSI_both[which(dPSI_both$dPSI > -15 & dPSI_both$dPSI < 15 ), ])
+dPSI_both_AF$Sample <- as.factor('Both')
+dPSI_both_CO$Sample <- as.factor('Both')
+# dPSI_both <- rbind(dPSI_both_AF,dPSI_both_CO)
+# dPSI_both$group <- as.factor('Both')
+names(dPSI_both_CO)[1] <- 'dPSI'
+names(dPSI_both_AF)[1] <- 'dPSI'
+
+# data_to_means_AF <- rbind(dPSI_asd_AF[dPSI_asd_AF$dPSI < 0,],dPSI_no_asd_AF[dPSI_no_asd_AF$dPSI < 0, ],dPSI_H12_AF[dPSI_H12_AF$dPSI < 0, ],dPSI_H15_AF[dPSI_H15_AF$dPSI < 0, ],dPSI_both_AF[dPSI_both_AF$dPSI < 0, ])
+
+
+## data_to_means_AF - affected evetns/ split to upregulated and downregulated 
+data_to_means_AF <- rbind(dPSI_asd_CO, dPSI_no_asd_CO,dPSI_H12_CO,dPSI_H15_CO,dPSI_both_CO)
+upreg <- data_to_means_AF[data_to_means_AF$dPSI > 0,]
+downreg <- data_to_means_AF[data_to_means_AF$dPSI < 0,]
+data_to_means_AF <- rbind(upreg,downreg)
+# upreg <- upreg[which(upreg$dPSI < 40),]
+# 
+# library(car)
+# my_anova <- aov(dPSI ~ Sample , data = data_to_means_AF)
+# Anova(my_anova, type = "2")
+# 
+# table(data_to_means$EVENT, data_to_means$group)
+
+library("ggpubr")
+compare_means(dPSI ~ EVENT, data_to_means_AF)
+
+library(dplyr)
+library(plotrix)
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = std.error(x[[col]]))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- plyr::rename(data_sum, c("mean" = varname))
+ return(data_sum)
+}
+
+
+
+
+## Tests, first one-way ANOVA test, then Kruskal-Wallis test
+res.aov <- aov(dPSI ~ Sample, data = upreg)
+
+## ANOVA test with no assumption of equal variances
+
+oneway.test(dPSI ~ Sample, data = upreg)
+pairwise.t.test(upreg$dPSI, upreg$Sample,
+                 p.adjust.method = "BH", pool.sd = FALSE)
+
+# Summary of the analysis
+summary(res.aov)
+TukeyHSD(res.aov)
+
+## Kruskal-Wallis test
+kruskal.test(dPSI ~ Sample, data = upreg)
+pairwise.wilcox.test(upreg$dPSI, upreg$Sample,
+                 p.adjust.method = "BH")
+
+library(dplyr)
+group_by(upreg, Sample) %>%
+  summarise(
+    count = n(),
+    mean = mean(dPSI, na.rm = TRUE),
+    sd = sd(dPSI, na.rm = TRUE),
+    median = median(dPSI, na.rm = TRUE),
+    IQR = IQR(dPSI, na.rm = TRUE)
+  )
+
+library("ggpubr")
+library(rstatix)
+
+res.kruskal <- data_to_means_AF %>% kruskal_test(dPSI ~ Sample)
+res.kruskal
+
+data_to_means_AF %>% kruskal_effsize(dPSI ~ Sample)
+pwc <- data_to_means_AF %>% 
+  dunn_test(dPSI ~ Sample, p.adjust.method = "bonferroni") 
+pwc
+pwc2 <- downreg %>% 
+  wilcox_test(dPSI ~ Sample, p.adjust.method = "bonferroni")
+pwc2
+
+pwc <- pwc %>% add_xy_position(x = "Sample")
+# pwc$y.position <- 3
+ggline(data_to_means_AF, x = "Sample", y = "dPSI", add = c("mean_se")) +
+  labs(
+    subtitle = get_test_label(res.kruskal, detailed = TRUE),
+    caption = get_pwc_label(pwc)
+    )
+
+ggboxplot(upreg, x = "Sample", y = "dPSI", 
+          color = "Sample",
+          ylab = "dPSI", xlab = "Sample")
+
+ggline(upreg, x = "Sample", y = "dPSI", 
+       add = c("mean_se"),
+       ylab = "dPSI", xlab = "Sample")
+
+
+df <- data_summary(data_to_means_AF, varname="dPSI", 
+                    groupnames=c("EVENT"))
+
+ggplot(df, aes(x=EVENT, y=dPSI, group=EVENT)) + 
+geom_pointrange(aes(ymin=dPSI-sd, ymax=dPSI+sd), size = 2, fatten = 1.5, show.legend = FALSE) + theme_bw() 
+
+kruskal.test(dPSI ~ EVENT, data = data_to_means_AF)
+pairwise.wilcox.test(data_to_means_AF$dPSI, data_to_means_AF$EVENT,
+                 p.adjust.method = "BH")
+library(rstatix)
+pwc <- data_to_means_AF %>%
+  wilcox_test(dPSI ~ EVENT, p.adjust.method = "bonferroni")
+pwc
+pwc2 <- data_to_means_AF %>%
+  sign_test(dPSI ~ EVENT, p.adjust.method = "bonferroni")
+pwc2
+```
+
+
+
+## BY EXON 
+
+```{r}
+metrics_exon <- read.delim("EVENT_METRICS-hg38.tab", header = TRUE)
+metrics_exon_CS <- metrics_exon[which(metrics_exon$Average > 95),]$EVENT
+metrics_exon_CR <- metrics_exon[which(metrics_exon$Average < 5),]$EVENT
+metrics_exon_AS_no <- metrics_exon[which(metrics_exon$Average > 10 & metrics_exon$Average < 90),]$EVENT
+
+table_CS <- table_Exon[table_Exon$EVENT %in% metrics_exon_CS,]
+table_CR <- table_Exon[table_Exon$EVENT %in% metrics_exon_CR,]
+table_AS_no <- table_Exon[table_Exon$EVENT %in% metrics_exon_AS_no,]
+
+gene_splicing_event <- unique(table_CS$GENE)
+splicing_genes <- heatmap_genes[heatmap_genes$gene_name %in% gene_splicing_event,]
+colnames(splicing_genes)[1] <- "GENE"
+table_CS_expr_spl <- inner_join(table_CS,splicing_genes, by = "GENE")
+
+
+```
+
+## Including Plots
+
+## קורולציה על ידי דלטא פסי
+
+```{r }
+
+both_Cor <- data.frame(cbind(table_CS_expr_spl$D_R_GFP / table_CS_expr_spl$D_R_Both),table_CS_expr_spl$`H1.2&H1.5`)
+both_Cor <- na.omit(both_Cor)
+both_Cor <- both_Cor[!is.infinite(rowSums(both_Cor)),]
+colnames(both_Cor) <- c("dPSI","FC")
+# both_Cor <- both_Cor[which(both_Cor$FC > 1 | both_Cor$FC < -1), ]
+# both_Cor$differential_percentile_intervals <- cut(both_Cor$FC, breaks = quantile(both_Cor$FC, probs = seq(0, 1, by = .25)),
+#                                                             include.lowest = TRUE, right = TRUE, dig.lab = 3,
+#                                                             ordered_result = FALSE)
+library(OneR)
+both_Cor$differential_percentile_intervals <-  bin(both_Cor$dPSI, nbins = 4, method = "content")
+X <- split(both_Cor, both_Cor$differential_percentile_intervals)
+check <- X[[1]]
+library(OneR)
+library("ggpubr")
+res <- cor.test(check$dPSI, check$FC, 
+                    method = "pearson")
+res
+
+ggscatter(check, x = "FC", y = "dPSI", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "", ylab = "")
+```
+
+
+
+## Check precentege of spliciing sginifcant events
+```{r}
+metrics <- read.delim("EVENT_INFO-hg38.tab", header = TRUE)
+diff_asd <- read.delim("DiffAS-hg38-ASD.tab", header = TRUE)
+diff_no_asd <- read.delim("DiffAS-hg38-no-ASD.tab", header = TRUE)
+diff_del <- read.delim("DiffAS-hg38-Org.tab", header = TRUE)
+diff_both <- read.delim("DiffAS-hg38-both.tab", header = TRUE)
+diff_h12 <- read.delim("DiffAS-hg38-h12.tab", header = TRUE)
+diff_h15 <- read.delim("DiffAS-hg38-h15.tab", header = TRUE)
+metrics_exon <- length(grep("EX", metrics$EVENT))
+metrics_intron <- length(grep("INT", metrics$EVENT))
+metrics_ALT3 <- length(grep("ALTA", metrics$EVENT))
+metrics_ALT5 <- length(grep("ALTD", metrics$EVENT))
+
+asd_exon <- length(grep("EX", diff_asd$EVENT))
+asd_intron <- length(grep("INT", diff_asd$EVENT))
+asd_ALT3 <- length(grep("ALTA", diff_asd$EVENT))
+asd_ALT5 <- length(grep("ALTD", diff_asd$EVENT))
+
+
+no_asd_exon <- length(grep("EX", diff_no_asd$EVENT))
+no_asd_intron <- length(grep("INT", diff_no_asd$EVENT))
+no_asd_ALT3 <- length(grep("ALTA", diff_no_asd$EVENT))
+no_asd_ALT5 <- length(grep("ALTD", diff_no_asd$EVENT))
+
+
+both_exon <- length(grep("EX", diff_both$EVENT))
+both_intron <- length(grep("INT", diff_both$EVENT))
+both_ALT3 <- length(grep("ALTA", diff_both$EVENT))
+both_ALT5 <- length(grep("ALTD", diff_both$EVENT))
+
+
+h12_exon <- length(grep("EX", diff_h12$EVENT))
+h12_intron <- length(grep("INT", diff_h12$EVENT))
+h12_ALT3 <- length(grep("ALTA", diff_h12$EVENT))
+h12_ALT5 <- length(grep("ALTD", diff_h12$EVENT))
+
+h15_exon <- length(grep("EX", diff_h15$EVENT))
+h15_intron <- length(grep("INT", diff_h15$EVENT))
+h15_ALT3 <- length(grep("ALTA", diff_h15$EVENT))
+h15_ALT5 <- length(grep("ALTD", diff_h15$EVENT))
+
+
+org_exon <- length(grep("EX", diff_del$EVENT))
+org_intron <- length(grep("INT", diff_del$EVENT))
+org_ALT3 <- length(grep("ALTA", diff_del$EVENT))
+org_ALT5 <- length(grep("ALTD", diff_del$EVENT))
+
+
+library(tidyverse)
+
+## total_Asd
+total_splice_times <- c(asd_intron,asd_exon,asd_ALT3,asd_ALT5)
+sum_total_asd <- sum(total_splice_times)
+total_splice_prec_asd <- c((asd_intron / sum_total_asd * 100),(asd_exon / sum_total_asd * 100),(asd_ALT3 / sum_total_asd * 100), (asd_ALT5 / sum_total_asd * 100))
+
+## total_no_Asd
+total_splice_times <- c(no_asd_intron,no_asd_exon,no_asd_ALT3,no_asd_ALT5)
+sum_total_no_asd <- sum(total_splice_times)
+total_splice_prec_no_asd <- c((no_asd_intron / sum_total_no_asd * 100),(no_asd_exon / sum_total_no_asd * 100),(no_asd_ALT3 / sum_total_no_asd * 100), (no_asd_ALT5 / sum_total_no_asd * 100))
+
+## total_org
+total_splice_times <- c(org_intron,org_exon,org_ALT3,org_ALT5)
+sum_total_org <- sum(total_splice_times)
+total_splice_prec_org <- c((org_intron / sum_total_org * 100),(org_exon / sum_total_org * 100),(org_ALT3 / sum_total_org * 100), (org_ALT5 / sum_total_org * 100))
+## total_both
+total_splice_times <- c(both_intron,both_exon,both_ALT3,both_ALT5)
+sum_total_both <- sum(total_splice_times)
+total_splice_prec_both <- c((both_intron / sum_total_both * 100),(both_exon / sum_total_both * 100),(both_ALT3 / sum_total_both * 100), (both_ALT5 / sum_total_both * 100))
+## total_h12
+total_splice_times <- c(h12_intron,h12_exon,h12_ALT3,h12_ALT5)
+sum_total_h12 <- sum(total_splice_times)
+total_splice_prec_h12 <- c((h12_intron / sum_total_h12 * 100),(h12_exon / sum_total_h12 * 100),(h12_ALT3 / sum_total_h12 * 100), (h12_ALT5 / sum_total_h12 * 100))
+## total_h15
+total_splice_times <- c(h15_intron,h15_exon,h15_ALT3,h15_ALT5)
+sum_total_h15 <- sum(total_splice_times)
+total_splice_prec_h15 <- c((h15_intron / sum_total_h15 * 100),(h15_exon / sum_total_h15 * 100),(h15_ALT3 / sum_total_h15 * 100), (h15_ALT5 / sum_total_h15 * 100))
+
+splicing_events <- c(rep("IR" , 7) , rep("ES" , 7) , rep("ALT3" , 7),rep("ALT5" , 7))
+DATA_base <- rep(c("VastDB","ASD","Non-ASD","Organoids","Both","H1.2","H1.5") , 4)
+total_splice_times_vastDB <- c(metrics_intron,metrics_exon,metrics_ALT3,metrics_ALT5)
+sum_vastDB <- sum(total_splice_times_vastDB)
+sum_vastDB
+total_splice_prec_vastDB <- c((metrics_intron / sum_vastDB * 100),(metrics_exon / sum_vastDB * 100),(metrics_ALT3 / sum_vastDB * 100), (metrics_ALT5 / sum_vastDB * 100))
+percentage <- c(total_splice_prec_vastDB[1],total_splice_prec_asd[1],total_splice_prec_no_asd[1],total_splice_prec_org[1],total_splice_prec_both[1],total_splice_prec_h12[1],total_splice_prec_h15[1],total_splice_prec_vastDB[2],total_splice_prec_asd[2],total_splice_prec_no_asd[2],total_splice_prec_org[2],total_splice_prec_both[2],total_splice_prec_h12[2],total_splice_prec_h15[2],total_splice_prec_vastDB[3],total_splice_prec_asd[3],total_splice_prec_no_asd[3],total_splice_prec_org[3],total_splice_prec_both[3],total_splice_prec_h12[3],total_splice_prec_h15[3],total_splice_prec_vastDB[4],total_splice_prec_asd[4],total_splice_prec_no_asd[4],total_splice_prec_org[4],total_splice_prec_both[4],total_splice_prec_h12[4],total_splice_prec_h15[4])
+data <- data.frame(splicing_events,DATA_base,percentage)
+ggplot(data, aes(fill=splicing_events, y=percentage, x=DATA_base)) + 
+    geom_bar(position="dodge", stat="identity") +
+  scale_fill_manual(values=c("#66CC66","purple","navyblue","red2"))
+
+
+
+## enrichment analysis 
+## ASD
+splice_events <- c("IR","ES","ALT3","ALT5")
+predicted_asd <- sum_total_asd*total_splice_prec_vastDB
+observed_asd <- sum_total_asd*total_splice_prec_asd
+log2_enrichment <- log2(observed_asd / predicted_asd)
+DATA_base <- rep(c("ASD") , 4)
+plot_log_data_asd <- data.frame(splice_events,DATA_base,log2_enrichment)
+ggplot(plot_log_data_asd, aes(y=log2_enrichment, x=splice_events, fill=splice_events)) + 
+    geom_bar(stat="identity", width=1) + scale_fill_manual(values=c("ALT3" = "#66CC66", "ALT5" = "purple", "ES" = "navyblue","IR" = "red2")) 
+IRp <- dhyper(h12_intron,metrics_intron,(sum_vastDB-metrics_intron),sum_total_h12) ; IRp
+EXp <- dhyper(h12_exon,metrics_exon,(sum_vastDB-metrics_exon),sum_total_h12) ; EXp
+ALT3P <- dhyper(h12_ALT3,metrics_ALT3,(sum_vastDB-metrics_ALT3),sum_total_h12) ; ALT3P
+ALT5P <- dhyper(h12_ALT5,metrics_ALT5,(sum_vastDB-metrics_ALT5),sum_total_h12) ; ALT5P
+
+
+## deletion
+splice_events <- c(rep("IR" , 2) , rep("ES" , 2) , rep("ALT3" , 2),rep("ALT5" , 2))
+predicted_no_asd <- sum_total_no_asd*total_splice_prec_vastDB
+observed_no_asd <- sum_total_no_asd*total_splice_prec_no_asd
+log2_enrichment_no_asd <- log2(observed_no_asd / predicted_no_asd)
+
+predicted_org <- sum_total_org*total_splice_prec_vastDB
+observed_org <- sum_total_org*total_splice_prec_org
+log2_enrichment_org <- log2(observed_org / predicted_org)
+
+log2_enrichment_deletion <- c(log2_enrichment_no_asd[1],log2_enrichment_org[1],log2_enrichment_no_asd[2],log2_enrichment_org[2],log2_enrichment_no_asd[3],log2_enrichment_no_asd[3],log2_enrichment_no_asd[4],log2_enrichment_org[4])
+DATA_base <- rep(c("Non-ASD","Organoids") , 4)
+
+plot_log_data_del <- data.frame(splice_events,DATA_base,log2_enrichment_deletion)
+names(plot_log_data_del)[length(names(plot_log_data_del))]<-"log2_enrichment" 
+ggplot(plot_log_data_del, aes(fill=splice_events, y=log2_enrichment_deletion, x=DATA_base)) + 
+    geom_bar(position="dodge", stat="identity", width=1) + scale_fill_manual(values=c("ALT3" = "#66CC66", "ALT5" = "purple", "ES" = "navyblue","IR" = "red2")) 
+
+## overexpression
+splice_events <- c(rep("IR" , 3) , rep("ES" , 3) , rep("ALT3" , 3),rep("ALT5" , 3))
+predicted_both <- sum_total_both*total_splice_prec_vastDB
+observed_both <- sum_total_both*total_splice_prec_both
+log2_enrichment_both <- log2(observed_both / predicted_both)
+
+predicted_h12 <- sum_total_h12*total_splice_prec_vastDB
+observed_h12 <- sum_total_h12*total_splice_prec_h12
+log2_enrichment_h12 <- log2(observed_h12 / predicted_h12)
+
+predicted_h15 <- sum_total_h15*total_splice_prec_vastDB
+observed_h15 <- sum_total_h15*total_splice_prec_h15
+log2_enrichment_h15 <- log2(observed_h15 / predicted_h15)
+
+log2_enrichment_OV <- c(log2_enrichment_both[1],log2_enrichment_h12[1],log2_enrichment_h15[1],log2_enrichment_both[2],log2_enrichment_h12[2],log2_enrichment_h15[2],log2_enrichment_both[3],log2_enrichment_h12[3],log2_enrichment_h15[3],log2_enrichment_both[4],log2_enrichment_h12[4],log2_enrichment_h15[4])
+DATA_base <- rep(c("H1.2&H1.5","H1.2","H1.5") , 4)
+
+plot_log_data_ov <- data.frame(splice_events,DATA_base,log2_enrichment_OV)
+names(plot_log_data_ov)[length(names(plot_log_data_ov))]<-"log2_enrichment" 
+ggplot(plot_log_data_ov, aes(fill=splice_events, y=log2_enrichment_OV, x=DATA_base)) + 
+    geom_bar(position="dodge", stat="identity", width=1) + scale_fill_manual(values=c("ALT3" = "#66CC66", "ALT5" = "purple", "ES" = "navyblue","IR" = "red2")) 
+
+## add p-values
+label.df <- data.frame(Group = splice_events,
+                       Value = c(IRp, EXp,ALT3P,ALT5P))
+p + geom_text(data = label.df, label = "***",size = 7)
+
+## heatmap of enrichment
+
+all_enrichment <- rbind(plot_log_data_asd,plot_log_data_del,plot_log_data_ov)
+by_splice <- all_enrichment %>% group_by(splice_events)
+groups_for_heatmap <- group_split(by_splice)
+names_colum <- c("event",groups_for_heatmap[[1]]$DATA_base)
+df <- setNames(data.frame(matrix(ncol = 7, nrow = 0)), names_colum)
+ALT3_event <- c("ALT3",groups_for_heatmap[[1]]$log2_enrichment)
+ALT5_event <- c("ALT5",groups_for_heatmap[[2]]$log2_enrichment)
+ES_event <- c("ES",groups_for_heatmap[[3]]$log2_enrichment)
+IR_event <- c("IR",groups_for_heatmap[[4]]$log2_enrichment)
+df <- rbind(df,ALT3_event,ALT5_event,ES_event,IR_event)
+colnames(df) <- names_colum
+row.names(df) <- df$event
+df[1] <- NULL
+df[] <- lapply(df, as.numeric)
+library(ComplexHeatmap)
+library(circlize)
+Heatmap(t(as.matrix(df)),name = "log2(Enrichment score)", row_km = 4, row_km_repeats = 1000, heatmap_legend_param = list(title_gp = gpar(fontsize = 6), legend_direction = "horizontal"),
+        column_title = "", row_title = "", rect_gp = gpar(col = "white", lwd = 3),
+        row_names_gp = gpar(fontsize = 6), column_names_gp =  gpar(fontsize = 6), width = unit(3, "cm"), cluster_columns = FALSE, col = colorRamp2(c(min(t(as.matrix(df))), 0,max(t(as.matrix(df)))),c("blue","white", "red")))
+```
+

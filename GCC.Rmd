@@ -1,0 +1,680 @@
+---
+title: "Matt"
+author: "Me"
+date: "10 11 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+library('dplyr')
+data <- read.table('exons.tab',header= TRUE,fill = TRUE)
+data$PSI_GRPA <- lead(data$WARNING.)
+data$PSI_GRPB <- lead(data$ignoring)
+data$PVAL_WILCOXON_GRPA_VS_GRPB <- lead(data$environment)
+df <- data[ -c(36:42) ]
+df <- na.omit(df)
+write.table(df, file = "vast-table.tab", quote = FALSE, sep = "\t",
+            row.names = FALSE)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+
+library("org.Hs.eg.db") 
+data_matt<- read.table('Matt_input_ex_unregulated.tab',header= TRUE,fill = TRUE)
+avector <- dplyr::pull(data, GENE)
+symbols <- mapIds(org.Hs.eg.db, keys = avector, keytype = "SYMBOL", column="ENSEMBL")
+sum(is.na(symbols))
+```
+
+
+
+
+
+```{r}
+#data_to_column <- read.table('id_eng.tab', header = FALSE)
+#data_to_column <- dplyr::pull(data_to_column, V1)
+data_matt$ENSEMBL_GID <- symbols
+my_data <- subset(data_matt, is.na(ENSEMBL_GID))
+check <- my_data[grep("HsaEX*", my_data$GENE),]
+data_matt <- data_matt[!(rownames(data_matt) %in% rownames(check)),]
+write.table(data_matt, file = "to_vast_exons_unreg.tab", quote = FALSE, sep = "\t",
+           row.names = FALSE)
+```
+
+
+
+
+```{r}
+data <- read.table('ifeatures.tab',header= TRUE,fill = TRUE)
+nc  <- ncol(data)
+data[, 3:nc] <- data[, 2:(nc-1)]
+data[, 2] <- NA
+data2 <- data
+upexon <- data.frame(data$SEQ_LONGESTUPEXON)
+downexon <- data.frame(data$SEQ_LONGESTDOEXON)
+```
+
+##Introns
+
+
+```{r}
+library(tidyr)
+vector <- c("Start","END","Chrom","Strand","ID")
+df <- separate(data2,INTRON_ID,vector,",")
+df$dPSI <- data_matt$dPSI
+df$group <- ifelse(df$dPSI>0,"up","down")
+Strand <- df$Strand
+almost_full <- data.frame(df$Chrom,df$Start,df$END)
+almost_full$ID <- paste(df$Start,df$END,df$Chrom,df$Strand,df$ID,df$MAXENTSCR_HSAMODEL_5SS,df$MAXENTSCR_HSAMODEL_3SS,df$dPSI,sep = '<->')
+almost_full$score <- 0
+almost_full$Strand <- Strand
+almost_full <- almost_full %>% 
+  rename(
+    Chrom = df.Chrom,
+    Start = df.Start,
+    END = df.END
+    )
+```
+
+
+
+```{r}
+data_un <- read.table('ifeatures_un.tab',header= TRUE,fill = TRUE)
+nc  <- ncol(data_un)
+data_un[, 3:nc] <- data_un[, 2:(nc-1)]
+data_un[, 2] <- NA
+data2 <- data_un
+library(tidyr)
+library(dplyr)
+vector <- c("Start","END","Chrom","Strand","ID")
+df_un <- separate(data2,INTRON_ID,vector,",")
+df_un$dPSI <- data_matt$dPSI
+df_un$group <- ifelse(df_un$dPSI>0,"up","down")
+Strand <- df_un$Strand
+almost <- data.frame(df_un$Chrom,df_un$Start,df_un$END)
+almost$ID <- paste(df_un$Start,df_un$END,df_un$Chrom,df_un$Strand,df_un$ID,df_un$MAXENTSCR_HSAMODEL_5SS,df_un$MAXENTSCR_HSAMODEL_3SS,df_un$dPSI,sep = '<->')
+almost$score <- 0
+almost$Strand <- Strand
+almost <- almost %>% 
+  rename(
+    Chrom = df_un.Chrom,
+    Start = df_un.Start,
+    END = df_un.END
+    )
+introns <- bind_rows(almost_full,almost)
+```
+
+
+
+```{r}
+x <- split(introns,introns$Strand)
+introns_minus_strand <- x[[1]]
+introns_plus_strand <- x[[2]]
+write.table(introns_minus_strand, file = "introns_minus_strand.tab", quote = FALSE, sep = "\t",
+            row.names = FALSE)
+write.table(introns_plus_strand, file = "introns_plus_strand.tab", quote = FALSE, sep = "\t",
+            row.names = FALSE)
+```
+
+
+
+
+##Exons
+
+```{r}
+data <- read.table('efeatures_un.tab',header= TRUE,fill = TRUE)
+nc  <- ncol(data)
+data[, 3:nc] <- data[, 2:(nc-1)]
+data[, 2] <- NA
+data2 <- data
+```
+
+
+
+```{r}
+library(tidyr)
+library(dplyr)
+vector <- c("Start","END","Chrom","Strand","ID")
+df <- separate(data2,EXON_ID,vector,",")
+df$dPSI <- data_matt$dPSI
+df$group <- ifelse(df$dPSI>0,"up","down")
+Strand <- df$Strand
+almost_full <- data.frame(df$Chrom,df$Start,df$END)
+almost_full$ID <- paste(df$Start,df$END,df$Chrom,df$Strand,df$ID,df$MAXENTSCR_HSAMODEL_5SS,df$MAXENTSCR_HSAMODEL_3SS,df$dPSI,sep = '<->')
+almost_full$score <- 0
+almost_full$Strand <- Strand
+colnames(almost_full) <- c("Chrom","Start","END","ID","score","Strand")
+```
+
+
+
+
+```{r}
+vector <- c("Start","END","Chrom","Strand","ID")
+df_un <- separate(data2,EXON_ID,vector,",")
+df_un$dPSI <- data_matt$dPSI
+df_un$group <- ifelse(df_un$dPSI>0,"up","down")
+Strand <- df_un$Strand
+almost <- data.frame(df_un$Chrom,df_un$Start,df_un$END)
+almost$ID <- paste(df_un$Start,df_un$END,df_un$Chrom,df_un$Strand,df_un$ID,df_un$MAXENTSCR_HSAMODEL_5SS,df_un$MAXENTSCR_HSAMODEL_3SS,df_un$dPSI,sep = '<->')
+almost$score <- 0
+almost$Strand <- Strand
+colnames(almost) <- c("Chrom","Start","END","ID","score","Strand")
+exones <- bind_rows(almost_full,almost)
+```
+
+
+```{r}
+x <- split(exones,exones$Strand)
+exones_minus_strand <- x[[1]]
+exones_plus_strand <- x[[2]]
+write.table(exones_minus_strand, file = "exones_minus_strand.tab", quote = FALSE, sep = "\t",
+            row.names = FALSE)
+write.table(exones_plus_strand, file = "exones_plus_strand.tab", quote = FALSE, sep = "\t",
+            row.names = FALSE)
+```
+
+
+
+
+```{r}
+data_1 <- read.table('matt_up_down_introns_AS.tab',header= TRUE)
+data_2 <- read.table('matt_up_down_introns_AS_unreg.tab',header= TRUE)
+FULL_data <- bind_rows(data_1,data_2)
+x <- split(FULL_data,FULL_data$strand)
+MATT_minus_strand <- x[[1]]
+MATT_plus_strand <- x[[2]]
+write.table(MATT_minus_strand, file = "matt_minus_strand_AS_introns.tab", quote = FALSE, sep = "\t",
+            row.names = FALSE)
+write.table(MATT_plus_strand, file = "matt_plus_strand_AS_introns.tab", quote = FALSE, sep = "\t",
+            row.names = FALSE)
+```
+
+
+
+
+
+
+```{r}
+data_to_split_strand <- read.table('all_exons.bed',header = TRUE)
+data_to_split_strand$id <- paste(data_to_split_strand$start,data_to_split_strand$end,data_to_split_strand$id,sep = '<->')
+x <- split(data_to_split_strand,data_to_split_strand$strand)
+minus_strand <- x[[1]]
+plus_strand <- x[[2]]
+write.table(minus_strand, file = "exons_minus_strand_all.tab", quote = FALSE, sep = "\t",
+            row.names = FALSE)
+write.table(plus_strand, file = "exons_plus_strand_all.tab", quote = FALSE, sep = "\t",
+            row.names = FALSE)
+```
+
+
+
+
+
+```{r}
+data_matt1 <- read.table('matt_up_down_EX_diffas_try5.tab', sep = '\t', header = TRUE)
+data_matt2 <- read.table('matt_up_down_EX_unreg_try5.tab', sep = '\t', header = TRUE)
+all_data <- rbind(data_matt1,data_matt2)
+X<-split(all_data, all_data$strand)
+
+minus <- X[[1]]
+plus <- X[[2]]
+
+#write.table(plus, file= 'matt_plus_strand_AS_introns.tab', quote = FALSE, sep = '\t', row.names = FALSE)
+write.table(minus, file= 'matt_minus_strand_AS_ex.tab', quote = FALSE, sep = '\t', row.names = FALSE)
+```
+
+
+
+
+
+
+
+```{r}
+data_to_split_strand <- read.table('like_matt.tab',header = TRUE)
+y <- split(data_to_split_strand,data_to_split_strand$strand)
+y_minus_strand <- y[[1]]
+y_plus_strand <- y[[2]]
+write.table(y_minus_strand, file = "matt_minus_strand_all.tab", quote = FALSE, sep = "\t",
+            row.names = FALSE)
+write.table(y_plus_strand, file = "matt_plus_strand_all.tab", quote = FALSE, sep = "\t",
+            row.names = FALSE)
+```
+
+
+
+```{r}
+data_to_plot <- read.table('file.txt',sep=",")
+coverage_GC <- as.numeric(data_to_plot[1,])
+pos <- seq(from = 1, to = length(coverage_GC), by = 1)
+data <- data.frame(coverage_GC,pos)
+data <- data %>% filter(!is.na(coverage_GC))
+total_days <- diff(range(data$pos))
+span <- 21/total_days
+fit <- loess(coverage_GC ~ pos, degree=1, span = span, data=data)
+data %>% mutate(smooth = fit$fitted) %>%
+  ggplot(aes(pos, coverage_GC)) +
+  geom_line(aes(pos, smooth), color="red") + geom_vline(xintercept = 75) + geom_vline(xintercept = 375)
+
+#lo <- loess(y~x)
+#plot(x,y)
+#lines(predict(lo), col='red')
+```
+
+
+```{r}
+data_to_plot <- read.table('file_exon.txt',sep=",")
+coverage_GC_unreg <- as.numeric(data_to_plot[1,])
+coverage_GC_upreg <- as.numeric(data_to_plot[2,])
+coverage_GC_downreg <-as.numeric(data_to_plot[3,])
+#pos <- seq(from = 1, to = length(coverage_GC), by = 1)
+data <- data.frame(coverage_GC_unreg,coverage_GC_upreg,coverage_GC_downreg)
+data <- data[-c(110:115,116:153,153:160),]
+len <- nrow(data)
+pos <- seq(from = 1, to = len, by = 1)
+data <- cbind(data,pos)
+total_days <- diff(range(data$pos))
+span <- 21/total_days
+data <- data %>% filter(!is.nan(coverage_GC_unreg),!is.nan(coverage_GC_upreg),!is.nan(coverage_GC_downreg))
+
+fit_unreg <- loess(data$coverage_GC_unreg ~ pos, degree=1, span = span, data=data)
+fit_upreg <- loess(data$coverage_GC_upreg ~ pos, degree=1, span = span, data=data)
+fit_downreg <- loess(data$coverage_GC_downreg ~ pos, degree=1, span = span, data=data)
+colors <- c("Unregulated" = "red", "Upregulated" = "blue", "Downregulated" = "green")
+data %>% mutate(smooth_unreg = fit_unreg$fitted, smooth_upreg = fit_upreg$fitted, smooth_downreg = fit_downreg$fitted) %>%
+  ggplot(aes(pos, data$coverage_GC_unreg)) +
+  geom_line(aes(y = smooth_unreg,color = "Unregulated"), size = 1.5) + geom_line(aes(y = smooth_upreg,color = "Upregulated"), size = 1.5) + geom_line(aes(y = smooth_downreg, color = "Downregulated"), size = 1.5) + geom_vline(xintercept = 109) + geom_vline(xintercept = 246) + labs(x = "Position",
+         y = "Percentage of GC coverage",
+         color = "") +
+    scale_color_manual(values = colors) + theme_bw()
+```
+
+
+```{r}
+library('data.table')
+data_to_plot <- read.table('file_with_introns.txt',sep=",")
+coverage_GC_unreg <- as.numeric(data_to_plot[1,])
+coverage_GC_upreg <- as.numeric(data_to_plot[2,])
+coverage_GC_downreg <- as.numeric(data_to_plot[3,])
+pos <- seq(from = 1, to = length(coverage_GC), by = 1)
+data <- data.frame(coverage_GC_unreg,coverage_GC_upreg,coverage_GC_downreg,pos)
+data <- data %>% filter(!is.na(coverage_GC_unreg),!is.na(coverage_GC_upreg),!is.na(coverage_GC_downreg))
+total_days <- diff(range(data$pos))
+span <- 21/total_days
+fit_unreg <- loess(coverage_GC_unreg ~ pos, degree=1, span = span, data=data)
+fit_upreg <- loess(coverage_GC_upreg ~ pos, degree=1, span = span, data=data)
+fit_downreg <- loess(coverage_GC_downreg ~ pos, degree=1, span = span, data=data)
+colors <- c("Unregulated" = "red", "Upregulated" = "blue", "Downregulated" = "green")
+data %>% mutate(smooth_unreg = fit_unreg$fitted, smooth_upreg = fit_upreg$fitted, smooth_downreg = fit_downreg$fitted) %>%
+  ggplot(aes(pos, coverage_GC_unreg)) +
+  geom_line(aes(y = smooth_unreg,color = "Unregulated"), size = 1.5) + geom_line(aes(y = smooth_upreg,color = "Upregulated"), size = 1.5) + geom_line(aes(y = smooth_downreg,color = "Downregulated"), size = 1.5) + geom_vline(xintercept = 72) + geom_vline(xintercept = 330) + labs(x = "Position",
+         y = "Percentage of GC coverage",
+         color = "") +
+    scale_color_manual(values = colors) + theme_bw()
+```
+
+
+## affected vs up-down Introns
+
+```{r}
+library('data.table')
+data_to_plot <- read.table('file_with_introns_affect.txt',sep=",")
+coverage_GC_unreg <- as.numeric(data_to_plot[1,])
+coverage_GC_affected <- as.numeric(data_to_plot[2,])
+#pos <- seq(from = 1, to = length(coverage_GC), by = 1)
+data <- data.frame(coverage_GC_unreg,coverage_GC_affected)
+data <- data[-c(1:2,73:82,331:377, 448:500),]
+len <- nrow(data)
+pos <- seq(from = 1, to = len, by = 1)
+data <- cbind(data,pos)
+total_days <- diff(range(data$pos))
+span <- 40/total_days
+fit_unreg <- loess(coverage_GC_unreg ~ pos, degree=1, span = span, data=data)
+fit_affected <- loess(coverage_GC_affected ~ pos, degree=1, span = span, data=data)
+colors <- c("Unaffected" = "red1", "Affected" = "red4")
+data %>% mutate(smooth_unreg = fit_unreg$fitted, smooth_affected = fit_affected$fitted) %>%
+  ggplot(aes(pos, coverage_GC_unreg)) +
+  geom_line(aes(y = smooth_unreg,color = "Unaffected"), size = 1.5) + geom_line(aes(y = smooth_affected,color = "Affected"), size = 1.5)  + geom_vline(xintercept = 70, linetype = "longdash") + geom_vline(xintercept = 200, linetype = "longdash") + geom_vline(xintercept = 330, linetype = "longdash") + labs(x = "",
+         y = "GC content(%)",
+         color = "") +
+    scale_color_manual(values = colors) + theme_bw() + scale_x_continuous(breaks = NULL)
+```
+
+## affected vs up-down exons
+
+```{r}
+data_to_plot <- read.table('file_exon_affected.txt',sep=",")
+coverage_GC_unreg <- as.numeric(data_to_plot[1,])
+coverage_GC_affected <- as.numeric(data_to_plot[2,])
+#pos <- seq(from = 1, to = length(coverage_GC), by = 1)
+data <- data.frame(coverage_GC_unreg,coverage_GC_affected)
+data <- data[-c(110:115,116:153,153:160,299:335),]
+len <- nrow(data)
+pos <- seq(from = 1, to = len, by = 1)
+data <- cbind(data,pos)
+total_days <- diff(range(data$pos))
+span <- 40/total_days
+
+
+fit_unreg <- loess(data$coverage_GC_unreg ~ pos, degree=1, span = span, data=data)
+fit_affected <- loess(data$coverage_GC_affected ~ pos, degree=1, span = span, data=data)
+colors <- c("Unaffected" = "deepskyblue", "Affected" = "navyblue")
+data %>% mutate(smooth_unreg = fit_unreg$fitted, smooth_affected = fit_affected$fitted) %>%
+  ggplot(aes(pos, data$coverage_GC_unreg)) +
+  geom_line(aes(y = smooth_unreg,color = "Unaffected"), size = 1.5) + geom_line(aes(y = smooth_affected,color = "Affected"), size = 1.5) + geom_vline(xintercept = 109, linetype = "longdash") + geom_vline(xintercept = 178, linetype = "longdash") + geom_vline(xintercept = 247, linetype = "longdash") + labs(x = "",
+         y = "GC content(%)",
+         color = "") +
+    scale_color_manual(values = colors) + theme_bw() + scale_x_continuous(breaks = NULL)
+```
+
+
+
+
+```{r}
+library("ggpval")
+GC_differ <- data.frame(read.table('GC_differ_int', header = TRUE, sep = '\t'))
+GC_differ <- na.omit(GC_differ)
+# colnames(GC_differ) <- c('differential','dPSI')
+# GC_differ <- GC_differ[which(GC_differ$dPSI > 12), ]
+GC_differ$differential_percentile_intervals <- cut(GC_differ$differential, breaks = quantile(GC_differ$differential, probs = seq(0, 1, by = .25)),
+                                                            include.lowest = TRUE, right = TRUE, dig.lab = 3,
+                                                            ordered_result = FALSE)
+
+
+
+
+
+
+X <- split(GC_differ, GC_differ$differential_percentile_intervals)
+df_extreme <- rbind(X[[1]],X[[2]],X[[3]],X[[4]])
+
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = std.error(x[[col]]))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- plyr::rename(data_sum, c("mean" = varname))
+ return(data_sum)
+}
+colnames(df_extreme) <- c('differential','dPSI', 'Differential.Quartiles')
+levels(df_extreme$Differential.Quartiles) <- c("1TH","2TH","3TH", "4TH")
+compare_means(dPSI ~ Differential.Quartiles, df_extreme)
+df <- data_summary(df_extreme, varname="dPSI", 
+                    groupnames=c("Differential.Quartiles"))
+
+ggplot(df, aes(x=Differential.Quartiles, y=dPSI, group=Differential.Quartiles)) + 
+geom_pointrange(aes(ymin=dPSI-sd, ymax=dPSI+sd), size = 2, fatten = 1.5, show.legend = FALSE) + theme_bw() 
+
+
+# colnames(df_extreme) <- c('differential','dPSI', 'Differential.Quartiles')
+# levels(df_extreme$Differential.Quartiles) <- c("1TH","2TH","3TH", "4TH")
+# p <- ggboxplot(df_extreme, x = "Differential.Quartiles", y = "dPSI") + stat_compare_means( label = "p.signif", label.x = 1.99, label.y = 40)
+# p
+```
+
+
+
+```{r, fig.width = 2, fig.height = 3}
+library(plotrix)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+pdf("mean_plot_intro_ret.pdf")
+GC_differ_affected <- data.frame(read.table('GC_differ_affected_unaffected_int', header = TRUE, sep = '\t'))
+# GC_differ_affected <- na.omit(GC_differ_affected)
+affected <- data.frame(na.omit(GC_differ_affected[,1]))
+unaffected <- data.frame(na.omit(GC_differ_affected[,2]))
+affected$Group <- as.factor('affected')
+names(affected)[1] <- 'Mean GC(%) Differential'
+unaffected$Group <- as.factor('unaffected')
+names(unaffected)[1] <- 'Mean GC(%) Differential'
+data_to_plot_affect <- rbind(affected,unaffected)
+
+
+
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = std.error(x[[col]]))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- plyr::rename(data_sum, c("mean" = varname))
+ return(data_sum)
+}
+
+data_to_plot_affect <- data_summary(data_to_plot_affect, varname="Mean GC(%) Differential", 
+                    groupnames=c("Group"))
+x_categories = c("red4", "red1");
+p <- ggplot(data_to_plot_affect, aes(x=Group, y=`Mean GC(%) Differential`)) + 
+geom_pointrange(aes(ymin=`Mean GC(%) Differential`-sd, ymax=`Mean GC(%) Differential`+sd), size = 2, fatten = 1.5, show.legend = FALSE, color = x_categories) + scale_colour_manual(values = c("affected" = "red4", "unaffected" = "red1")) + theme_bw() + annotate("text", x = "unaffected", y = 4.01, label = "****") + scale_x_discrete(breaks = NULL) +
+  theme(
+    axis.title.y = element_text(size = 15) 
+  ) + labs(x = "",
+         y = "Mean GC (%) Differential",
+         color = "")
+
+print(p)
+dev.off()
+```
+
+
+
+```{r}
+GC_differ <- data.frame(read.table('GC_differ', header = TRUE, sep = '\t'))
+GC_differ <- na.omit(GC_differ)
+# colnames(GC_differ) <- c('differential','dPSI')
+GC_differ <- GC_differ[which(GC_differ$dPSI > 10 & GC_differ$dPSI < 35), ]
+GC_differ$differential_percentile_intervals <- cut(GC_differ$differential, breaks = quantile(GC_differ$differential, probs = seq(0, 1, by = .25)),
+                                                            include.lowest = TRUE, right = TRUE, dig.lab = 3,
+                                                            ordered_result = FALSE)
+
+
+
+
+
+
+X <- split(GC_differ, GC_differ$differential_percentile_intervals)
+df_extreme <- rbind(X[[1]],X[[2]],X[[3]],X[[4]])
+
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = std.error(x[[col]]))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- rename(data_sum, c("mean" = varname))
+ return(data_sum)
+}
+colnames(df_extreme) <- c('differential','dPSI', 'Differential.Quartiles')
+levels(df_extreme$Differential.Quartiles) <- c("1TH","2TH","3TH", "4TH")
+compare_means(dPSI ~ Differential.Quartiles, df_extreme)
+df <- data_summary(df_extreme, varname="dPSI", 
+                    groupnames=c("Differential.Quartiles"))
+ggplot(df, aes(x=Differential.Quartiles, y=dPSI, group=Differential.Quartiles)) + 
+geom_pointrange(aes(ymin=dPSI-sd, ymax=dPSI+sd), size = 2, fatten = 1.5, show.legend = FALSE) + theme_bw() + annotate("text", x = "4TH", y = 17.7, label = "*")
+```
+
+
+
+
+
+```{r, fig.width = 2, fig.height = 3}
+library(plotrix)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+GC_differ_affected <- data.frame(read.table('GC_differ_affected_unaffected', header = TRUE, sep = '\t'))
+GC_differ_affected <- na.omit(GC_differ_affected)
+affected <- data.frame(GC_differ_affected[,1])
+unaffected <- data.frame(GC_differ_affected[,2])
+affected$Group <- as.factor('affected')
+names(affected)[1] <- 'Mean GC(%) Differential'
+unaffected$Group <- as.factor('unaffected')
+names(unaffected)[1] <- 'Mean GC(%) Differential'
+data_to_plot_affect <- rbind(affected,unaffected)
+
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = std.error(x[[col]]))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- plyr::rename(data_sum, c("mean" = varname))
+ return(data_sum)
+}
+
+
+
+data_to_plot_affect <- data_summary(data_to_plot_affect, varname="Mean GC(%) Differential", 
+                    groupnames=c("Group"))
+x_categories = c("navyblue", "deepskyblue")
+ggplot(data_to_plot_affect, aes(x=Group, y=`Mean GC(%) Differential`)) + 
+geom_pointrange(aes(ymin=`Mean GC(%) Differential`-sd, ymax=`Mean GC(%) Differential`+sd), size = 2, fatten = 1.5, show.legend = FALSE, color = x_categories) + scale_colour_manual(values = c("affected" = "deepskyblue", "unaffected" = "navyblue"))  + labs(x = "",
+         y = "Mean GC (%) Differential",
+         color = "") +
+  scale_y_continuous(breaks = seq(from = 3.4, to = 5.7, by = 0.4), limits = c(3.4,5.7)) + theme_bw() + annotate("text", x = "unaffected", y = 5.7, label = "****") + scale_x_discrete(breaks = NULL) +
+  theme(
+    axis.title.y = element_text(size = 15)
+  )
+```
+
+
+
+```{r}
+plot.with.inset <-
+  ggdraw() +
+  draw_plot(main.plot_exon) +
+  draw_plot(inset.plot_exon, x = 0.4, y = .4, width = .7, height = .5)
+plot.with.inset
+```
+
+
+
+## subcompartments- exons
+
+```{r}
+sub_unreg <- data.frame(read.table('unreg_exon.tab', header = FALSE, sep = '\t'))
+sub_unreg <- sub_unreg[-7,]
+total_unreg <- sum(sub_unreg$V2)
+precen <- function(t, num) {
+  return(num / t * 100)
+}
+sub_unreg$prec <- c(precen(total_unreg,sub_unreg[1,2]),precen(total_unreg,sub_unreg[2,2]),precen(total_unreg,sub_unreg[3,2]),precen(total_unreg,sub_unreg[4,2]), precen(total_unreg,sub_unreg[5,2]), precen(total_unreg,sub_unreg[6,2]))
+```
+
+
+
+
+
+```{r}
+sub <- data.frame(read.table('dtest.tab', header = FALSE, sep = '\t'))
+sub <- sub[-7,]
+total_affected <- sum(sub$V2)
+precen <- function(t, num) {
+  return(num / t * 100)
+}
+sub$prec <- c(precen(total_affected,sub[1,2]),precen(total_affected,sub[2,2]),precen(total_affected,sub[3,2]),precen(total_affected,sub[4,2]), precen(total_affected,sub[5,2]), precen(total_affected,sub[6,2]))
+```
+
+
+## enrichment
+
+
+
+```{r}
+predicted <- total_affected*sub_unreg$prec
+observed <- total_affected*sub$prec
+log2_enrichment <- log2(observed / predicted)
+plot_log_data <- data.frame(log2_enrichment,sub$V1)
+colnames(plot_log_data) <- c("Log2_enrichment", "Subcompartment")
+Subcompartment <- 
+p <- ggplot(plot_log_data, aes(y=Log2_enrichment, x=Subcompartment, fill=Subcompartment)) + 
+    geom_bar(stat="identity", width=1) + scale_fill_manual(values=c("A1" = "red4", "A2" = "red1", "B1" = "lightgreen","B2" = "green1", "B3" = "green3", "B4" = "green4")) 
+A1 <- dhyper(sub[1,2],sub_unreg[1,2],(total_unreg-sub_unreg[1,2]),total_affected) ; A1
+A2 <- dhyper(sub[2,2],sub_unreg[2,2],(total_unreg-sub_unreg[2,2]),total_affected) ; A2
+B1 <- dhyper(sub[3,2],sub_unreg[3,2],(total_unreg-sub_unreg[3,2]),total_affected) ; B1
+B2 <- dhyper(sub[4,2],sub_unreg[4,2],(total_unreg-sub_unreg[4,2]),total_affected) ; B2
+B3 <- dhyper(sub[5,2],sub_unreg[5,2],(total_unreg-sub_unreg[5,2]),total_affected) ; B3
+B4 <- dhyper(sub[6,2],sub_unreg[6,2],(total_unreg-sub_unreg[6,2]),total_affected) ; B4
+p + theme_bw() + geom_text(data = plot_log_data, label = c("****","***","**","****","****","****"),size = 4) + scale_x_discrete(breaks = NULL)
+```
+
+
+## subcompartments- introns
+
+
+```{r}
+sub_unreg_intron <- data.frame(read.table('intron_unreg.tab', header = FALSE, sep = '\t'))
+total_unreg <- sum(sub_unreg_intron$V2)
+precen <- function(t, num) {
+  return(num / t * 100)
+}
+sub_unreg_intron$prec <- c(precen(total_unreg,sub_unreg_intron[1,2]),precen(total_unreg,sub_unreg_intron[2,2]),precen(total_unreg,sub_unreg_intron[3,2]),precen(total_unreg,sub_unreg_intron[4,2]), precen(total_unreg,sub_unreg_intron[5,2]), precen(total_unreg,sub_unreg_intron[6,2]))
+```
+
+
+
+```{r}
+sub_affected_intron <- data.frame(read.table('intron_affected.tab', header = FALSE, sep = '\t'))
+total_affected <- sum(sub_affected_intron$V2)
+precen <- function(t, num) {
+  return(num / t * 100)
+}
+sub_affected_intron$prec <- c(precen(total_affected,sub_affected_intron[1,2]),precen(total_affected,sub_affected_intron[2,2]),precen(total_affected,sub_affected_intron[3,2]),precen(total_affected,sub_affected_intron[4,2]), precen(total_affected,sub_affected_intron[5,2]), precen(total_affected,sub_affected_intron[6,2]))
+```
+
+
+
+
+```{r}
+predicted <- total_affected*sub_unreg_intron$prec
+observed <- total_affected*sub_affected_intron$prec
+log2_enrichment <- log2(observed / predicted)
+plot_log_data <- data.frame(log2_enrichment,sub_affected_intron$V1)
+colnames(plot_log_data) <- c("Log2_enrichment", "Subcompartment")
+Subcompartment <- 
+p <- ggplot(plot_log_data, aes(y=Log2_enrichment, x=Subcompartment, fill=Subcompartment)) + 
+    geom_bar(stat="identity", width=1) + scale_fill_manual(values=c("A1" = "red4", "A2" = "red1", "B1" = "lightgreen","B2" = "green1", "B3" = "green3", "B4" = "green4")) 
+A1 <- dhyper(sub_affected_intron[1,2],sub_unreg_intron[1,2],(total_unreg-sub_unreg_intron[1,2]),total_affected) ; A1
+A2 <- dhyper(sub_affected_intron[2,2],sub_unreg_intron[2,2],(total_unreg-sub_unreg_intron[2,2]),total_affected) ; A2
+B1 <- dhyper(sub_affected_intron[3,2],sub_unreg_intron[3,2],(total_unreg-sub_unreg_intron[3,2]),total_affected) ; B1
+B2 <- dhyper(sub_affected_intron[4,2],sub_unreg_intron[4,2],(total_unreg-sub_unreg_intron[4,2]),total_affected) ; B2
+B3 <- dhyper(sub_affected_intron[5,2],sub_unreg_intron[5,2],(total_unreg-sub_unreg_intron[5,2]),total_affected) ; B3
+B4 <- dhyper(sub_affected_intron[6,2],sub_unreg_intron[6,2],(total_unreg-sub_unreg_intron[6,2]),total_affected) ; B4
+p + theme_bw() + geom_text(data = plot_log_data, label = c("**","****","***","****","**","****"),size = 4) + scale_x_discrete(breaks = NULL)
+```
+
+
+```{r}
+data1 <- read.table('exons_AS.bed', sep = '\t', header = TRUE)
+data2 <- read.table('exons_AS_unreg.bed', sep = '\t', header = TRUE)
+all_data <- rbind(data1,data2)
+shuffled_data= all_data[sample(1:nrow(all_data)), ]
+write.table(shuffled_data, file= 'coords_shuffled_exons.tab', quote = FALSE, sep = '\t', row.names = FALSE)
+```
+
