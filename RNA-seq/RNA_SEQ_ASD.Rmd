@@ -1,0 +1,438 @@
+---
+title: "RNA_SEQ_Gene_Expression"
+output: html_document
+date: '2022-05-10'
+---
+
+
+```{r}
+#Setting working dir
+library("tidyverse")
+library("reshape2")
+library("ggplot2")
+library("dplyr")
+library("edgeR")
+```
+
+
+
+
+```{r}
+#Reading counts matrix as DataFrame and with no V# header and setting the ID column as index column
+data <- read.delim("COUNTS-hg38-23-asd.tab")
+
+#Adding matching prefixes to columns names accroding to the cohort they came from("ASD","No ASD" or "Control)
+data %>% rename_with(~paste0("ASD_", .), c("SRR11015324_1","SRR11015325_1","SRR11015326_1","SRR11015311_1","SRR11015312_1","SRR11015313_1","SRR11015335_1","SRR11015336_1","SRR11015337_1")) -> data
+data %>% rename_with(~paste0("No_ASD_", .), c("SRR11015308_1","SRR11015309_1","SRR11015327_1","SRR11015329_1")) -> data
+data %>% rename_with(~paste0("Control_", .), c("SRR11015303_1","SRR11015304_1","SRR11015305_1",
+                                                  "SRR11015306_1","SRR11015307_1","SRR11015347_1","SRR11015348_1",
+                                                      "SRR11015349_1","SRR11015350_1","SRR11015351_1")) -> data
+#omitting NA
+data <- na.omit(data)
+data <- aggregate(. ~ NAME, data[,-1], sum)
+data <- data[apply(data[,c(-1,-2)], 1, function(x) !all(x==0)),]
+
+
+
+#Changing columns names
+colnames(data) <- c("gene_name","control1","control2","control3","control4","control5",
+                    "No_ASD1","No_ASD2",
+                    "ASD1","ASD2","ASD3","ASD4","ASD5","ASD6","no_ASD3","no_ASD4","ASD7","ASD8","ASD9",
+                    "control6","control7","control8","control9","control10")
+
+#Removing outliers samples 
+# data <- data[ , c("ASD1","ASD2","ASD3","No_ASD1",
+#                     "No_ASD2","No_ASD3"
+#                     ,"Control2","Control3","Control4")]
+#Defining group
+#ASD == 3
+#No_ASD == 2
+#Control == 1
+group <- factor(c(1,1,1,1,2,2,3,3,3,3,3,3,2,2,3,3,3))
+library(sva)
+batch <- factor(c(1,2,2,1,4,4,3,3,3,4,4,4,4,4,4,2,2))
+modcombat <- as.data.frame(ComBat_seq(as.matrix(data[,c(-1, -2,-20, -21, -22, -23, -24)]),batch=batch, group=group))
+#Creating DGEList object
+y <- DGEList(counts=modcombat, genes=data[,1], group = group)
+design <- model.matrix(~group)
+keep <- filterByExpr(y)
+y <- y[keep,,keep.lib.sizes=FALSE]
+y <- calcNormFactors(y)
+y$samples
+
+
+```
+
+
+
+
+
+```{r}
+#Calculating library size
+eff.lib.size <- y$samples$lib.size * y$samples$norm.factors
+#Extracting normalized counts
+normCounts <- cpm(y)
+pseudoNormCounts <- log2(normCounts + 1)
+normCounts_ASD <- cbind(y$genes,pseudoNormCounts)
+#Plotting box plot
+boxplot(pseudoNormCounts, col="gray", las=3)
+#Plotting MDS plot + legend
+plotMDS(pseudoNormCounts,col=as.numeric(group))
+legend("topleft", as.character(unique(group)),col=1:3, pch=20)
+```
+```{r}
+ #Estimating dispersion
+ y <- estimateDisp(y, design)
+ #Defining fit
+ fit <- glmQLFit(y, design)
+ 
+ #Creating the comparisons between every two groups 
+ qlf.No_ASDvsControl <- glmQLFTest(fit, coef=2)
+ qlf.ASDvsControl <- glmQLFTest(fit, coef=3)
+ qlf.ASDvsNo_ASD <- glmQLFTest(fit, contrast=c(0,-1,1))
+ qlf.all <- glmQLFTest(fit, coef=2:3)
+ 
+ #topTags on each comparison and then extracting up and down values
+ #ASDvsControl
+ res_ASDvsControl <- topTags(qlf.ASDvsControl, n = Inf, p = 0.05)$table
+ 
+ up_ASDvsControl <- res_ASDvsControl[res_ASDvsControl$logFC > 0,]
+ 
+
+ down_ASDvsControl <- res_ASDvsControl[res_ASDvsControl$logFC < 0,]
+
+  
+ #ASDvsNo_ASD
+ res_ASDvsNo_ASD <- topTags(qlf.ASDvsNo_ASD, n = Inf, p = 0.05)$table
+ 
+ up_ASDvsNo_ASD <- res_ASDvsNo_ASD[res_ASDvsNo_ASD$logFC > 0,]
+
+
+ down_ASDvsNo_ASD <- res_ASDvsNo_ASD[res_ASDvsNo_ASD$logFC < 0,]
+ 
+
+ 
+ #No_ASDvsControl
+ res_No_ASDvsControl <- topTags(qlf.No_ASDvsControl, n = Inf, p = 0.05)$table
+ 
+ up_No_ASDvsControl <- res_No_ASDvsControl[res_No_ASDvsControl$logFC > 0,]
+
+ 
+ down_No_ASDvsControl <- res_No_ASDvsControl[res_No_ASDvsControl$logFC < 0,]
+ 
+
+ 
+ 
+ res_all <- topTags(qlf.all, n = Inf, p = 0.05)$table
+ to_heatmap_foldchange <- res_all[,1:3]
+to_heatmap_foldchange <- to_heatmap_foldchange[which(to_heatmap_foldchange$genes %in% all_coding_genes$hgnc_symbol),]
+colnames(to_heatmap_foldchange) <- c('gene_name','Non-ASD','ASD')
+ 
+ library("SuperExactTest")
+ library(dplyr)
+ mart <- useMart("ENSEMBL_MART_ENSEMBL", host = "https://www.ensembl.org")
+ mart <- useDataset("hsapiens_gene_ensembl", mart)
+ del_genes <- c('SPN','QPRT','C16orf54','ZG16','KIF22','MAZ','PRRT2','C16orf53','MVP','CDIPT','SEZ6L2','ASPHD1','KCTD13','TMEM219','TAOK2','HIRIP3','CCDC95','DOC2A','C16orf92','FAM57B','ALDOA','PPP4C','TBX6','YPEL3','GDPD3','MAPK3','CORO1A')
+ ##Up
+ res_ASDvsControl <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = res_ASDvsControl[,1],
+  uniqueRows=TRUE)
+ ##Down
+  res_No_ASDvsControl <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values =  res_No_ASDvsControl[,1],
+  uniqueRows=TRUE)
+  ## 16p11.2 del
+ both <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = deg[,1],
+  uniqueRows=TRUE)
+
+
+ 
+ 
+ res_ASDvsControl_coding <- filter(res_ASDvsControl, gene_biotype == "protein_coding")
+ res_No_ASDvsControl_coding <- filter(res_No_ASDvsControl, gene_biotype == "protein_coding")
+ both_coding <- filter(both, gene_biotype == "protein_coding")
+
+ 
+ 
+ x <- list(res_ASDvsControl[,1],deg[,1],fourC_genes)
+ obj <- supertest(x,n=30000)
+ up_result_coding <- summary(obj)$Table
+
+ ## Venm diagram
+ library("ggvenn")
+ library("readxl")
+ fourC <- read_excel("4C.xlsx", col_names = TRUE, skip = 1)
+ fourC <- fourC[grep("_Del_vs_Ctrl", fourC$`Viewpoint-comparison`),]
+ fourC_genes <- unique(fourC$`Official gene symbol`)
+ upRegVenn <-list('ASDvsControl'=res_ASDvsControl[,1], 'H1.5-Ov'=deg[,1], "4C"=fourC_genes)
+ ggvenn(upRegVenn)
+
+ 
+ ## genes only in ASD vs Control
+ ASD_4c_both_genes <- unlist(strsplit(up_result_coding[7,]$Elements, "\\,"))
+ only_ASD_genes <- ASD_genes[!(ASD_genes %in% unlist(strsplit(up_result_coding[6,]$Elements, "\\,")))]
+ ASD_4c_both_genes<- str_replace_all(string=ASD_4c_both_genes, pattern=" ", repl="")
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ both <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = deg[,1],
+  uniqueRows=TRUE)
+ 
+ both <- filter(both, gene_biotype == "protein_coding")
+ x <- list(only_ASD_genes, both[,1])
+ obj <- supertest(x,n=19383)
+ ASD_coding <- summary(obj)$Table
+ Venn <-list('ASDvscontrol'=only_ASD_genes,'H1.5' = both[,1])
+ ggvenn(Venn)
+ 
+ 
+ 
+```
+
+
+## histones
+
+
+
+
+```{r}
+ histones <- res_all %>% filter(grepl("HIST1H", genes))
+ histones <- histones[,1:3]
+ colnames(histones) <- c("Histone", "Non_ASD", "ASD")
+ econdatalong <- gather(histones, key="ASD_status", value="FC(Gene Expression)", c("Non_ASD", "ASD"))
+ ggplot(econdatalong, aes(x=ASD_status, y=`FC(Gene Expression)`, fill = ASD_status))+
+  geom_bar(stat='identity') + facet_wrap(Histone ~ ., nrow = 4)  + theme_bw() + theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+ 
+ 
+del_expr <- res_all[res_all$genes %in% c("MVP","CORO1A","MAPK3","PPP4C","QPRT","TAOK2","KIF22","ALDOA","MAZ","HIRIP3"), ]
+
+check_if_del <- check_if[check_if$gene_name %in% del_expr$genes,]
+del_expr <- del_expr %>%
+  slice(match(check_if_del$gene_name, genes))
+heatmap_del <- cbind(check_if_del,del_expr[,2:3])
+colnames(heatmap_del)[5] <- "No_ASD"
+colnames(heatmap_del)[6] <- "ASD"
+row.names(heatmap_del) <- heatmap_del$gene_name
+heatmap_del[1] <- NULL
+
+library(ComplexHeatmap)
+library(circlize)
+
+Heatmap(as.matrix(heatmap_del),name = "Log(FC Gene Expression)", heatmap_legend_param = list(title_gp = gpar(fontsize = 6), legend_direction = "horizontal"),
+        column_title = "", row_title = "",
+        row_names_gp = gpar(fontsize = 6), column_names_gp =  gpar(fontsize = 6), width = unit(3, "cm"), cluster_columns = FALSE, cluster_rows =  FALSE, col = colorRamp2(c(min(as.matrix(heatmap_del)), 0,max(as.matrix(heatmap_del))),c("blue","white", "red")))
+```
+
+
+
+
+
+### combine all gene expression 
+```{r}
+result_all_genes_asd <- res_all[res_all$genes %in% deg$genes,]
+result_all_genes_ov <- deg[deg$genes %in% result_all_genes_asd$genes,]
+result_all_genes_asd <- result_all_genes_asd[order(result_all_genes_asd$genes),]
+result_all_genes_ov <- result_all_genes_ov[order(result_all_genes_ov$genes),]
+heatmap_genes_all <- cbind(result_all_genes_ov[,1:4],result_all_genes_asd[,2:3])
+colnames(heatmap_genes_all) <- c("gene_name","H1.2","H1.5","H1.2&H1.5","No_ASD","ASD")
+
+coding_genes_heatmap<- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = heatmap_genes_all[,1],
+  uniqueRows=TRUE)
+
+
+
+coding_genes_heatmap <- filter(coding_genes_heatmap, gene_biotype == "protein_coding")
+heatmap_genes <- heatmap_genes_all[heatmap_genes_all$gene_name %in% coding_genes_heatmap[,1],]
+del_heat_genes <- heatmap_genes[heatmap_genes$gene_name %in% del_genes,]
+spat_heat_genes <- heatmap_genes[heatmap_genes$gene_name %in% c("ATXN2L","TUFM","SH2B1","ATP2A1","RABEP2","CD19","NFATC2IP","SPNS1","LAT"),]
+next_del_genes <- read.delim("2p15_genes", header = TRUE)
+next_del_genes <- unique(next_del_genes$name2)
+next_del_heat_genes <- heatmap_genes[heatmap_genes$gene_name %in% next_del_genes,]
+fourC_heatmap_genes <- heatmap_genes[heatmap_genes$gene_name %in% fourC_genes,]
+fourC_heatmap_genes <- filter(fourC_heatmap_genes,  gene_name != "GRIP1")
+heatmap_genes <- filter(heatmap_genes,  (H1.2 > 0.5 |  H1.2 < -0.5) &  (H1.5 > 0.5 |  H1.5 < -0.5))
+heatmap_genes <- filter(heatmap_genes,  `H1.2&H1.5` > 0.5 |  `H1.2&H1.5` < -0.5)
+heatmap_genes <- rbind(heatmap_genes, del_heat_genes)
+row.names(heatmap_genes) <- heatmap_genes$gene_name
+heatmap_genes[1] <- NULL
+
+
+order_by_me <- c("CORO1A","TAOK2","YPEL3","KIF22","PPP4C","MAZ","ALDOA","HIRIP3","TBX6")
+del_heat_genes <- del_heat_genes %>%
+  slice(match(order_by_me, gene_name))
+row.names(del_heat_genes) <- del_heat_genes$gene_name
+del_heat_genes[1] <- NULL
+
+
+
+row.names(fourC_heatmap_genes) <- fourC_heatmap_genes$gene_name
+fourC_heatmap_genes[1] <- NULL
+fourC_heatmap_genes <- data.frame(scale(fourC_heatmap_genes))
+
+## PCA 4c data
+
+fourC.pca <- prcomp(t(fourC_heatmap_genes), center = TRUE,scale. = TRUE)
+library(ggbiplot)
+
+ggbiplot(fourC.pca)
+##clustering 
+
+
+wss <- (nrow(fourC_heatmap_genes)-1)*sum(apply(fourC_heatmap_genes,2,var))
+for (i in 2:25) wss[i] <- sum(kmeans(fourC_heatmap_genes,
+                                     centers=i)$withinss)
+plot(1:25, wss, type="b", xlab="Number of Clusters",
+     ylab="Within groups sum of squares")
+
+library(cluster)
+sil <- rep(0, 25)
+#repeat k-means for 1:20 and extract silhouette:
+for(i in 2:25){
+  k1to20 <- kmeans(fourC_heatmap_genes, centers = i, nstart = 10000, iter.max = 2000)
+  ss <- silhouette(k1to20$cluster, dist(fourC_heatmap_genes))
+  sil[i] <- mean(ss[, 3])
+}
+# Plot the  average silhouette width
+plot(1:25, sil, type = "b", pch = 19, xlab = "Number of clusters k", ylab="Average silhouette width")
+abline(v = which.max(sil), lty = 2)
+
+library(vegan)
+fit <- cascadeKM(fourC_heatmap_genes, 1, 25, iter = 2000)
+plot(fit, sortg = TRUE, grpmts.plot = TRUE)
+
+set.seed(13)
+gap <- clusGap(fourC_heatmap_genes, kmeans, 25, B = 1000, verbose = interactive())
+plot(gap, main = "Gap statistic")
+abline(v=which.max(gap$Tab[,3]), lty = 2)
+
+set.seed(20)
+kClust <- kmeans(fourC_heatmap_genes, centers=6, nstart = 10000, iter.max = 2000)
+kClusters <- kClust$cluster
+# function to find centroid in cluster i
+clust.centroid = function(i, dat, clusters) {
+  ind = (clusters == i)
+  colMeans(dat[ind,])
+}
+kClustcentroids <- sapply(levels(factor(kClusters)), clust.centroid, fourC_heatmap_genes, kClusters)
+
+heatmap_genes_clusters <- data.frame(cbind(fourC_heatmap_genes,kClusters))
+
+
+Heatmap(as.matrix(heatmap_genes),name = "Log(FC Gene Expression)", heatmap_legend_param = list(title_gp = gpar(fontsize = 6), legend_direction = "horizontal"),
+        column_title = "", row_title = "",
+        row_names_gp = gpar(fontsize = 6), column_names_gp =  gpar(fontsize = 6), width = unit(3, "cm"), height = unit(11, "in"),column_km = 2, column_km_repeats = 1000, row_km = 7, row_km_repeats = 1000, col = colorRamp2(c(min(as.matrix(heatmap_genes)), 0,max(as.matrix(heatmap_genes))),c("blue","white", "red")))
+
+
+
+cluster1 <- filter(heatmap_genes_clusters, kClusters == 6)[,1:5]
+
+
+fourC_heatmap_genes_filter <- filter(fourC_heatmap_genes,  (H1.2 > 0.5 |  H1.2 < -0.5) &  (H1.5 > 0.5 |  H1.5 < -0.5))
+fourC_heatmap_genes_filter <- filter(fourC_heatmap_genes,  `H1.2&H1.5` > 0.5 |  `H1.2&H1.5` < -0.5)
+library(ComplexHeatmap)
+library(circlize)
+Heatmap(as.matrix(cluster1),name = "Z score(FC Gene Expression)", heatmap_legend_param = list(title_gp = gpar(fontsize = 6), legend_direction = "horizontal"),
+        column_title = "", row_title = "",
+        row_names_gp = gpar(fontsize = 6), column_names_gp =  gpar(fontsize = 6), width = unit(3, "cm"), column_km = 0, column_km_repeats = 1000, row_km = 0, row_km_repeats = 1000, col = colorRamp2(c(min(as.matrix(cluster1)), 0,max(as.matrix(cluster1))),c("blue","white", "red")))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,224 @@
+---
+title: "rna_seq_h1.2_h1.5"
+author: "Me"
+date: "1 5 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r librarys}
+library(edgeR)
+library(sva)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r}
+data <- read.delim('COUNTS-hg38-5-H1.5.tab')
+data <- na.omit(data)
+data <- data[,-3]
+data <- aggregate(. ~ NAME, data[,-1], sum)
+data <- data[apply(data[,c(-1,-2)], 1, function(x) !all(x==0)),]
+combat <- data[,2:5]
+group <- factor(c(1,1,2,2))
+batch <- factor(c(1,2,1,2))
+modcombat <- as.data.frame(ComBat_seq(as.matrix(combat),batch=batch, group=NULL))
+modcombat <- data.frame(data['NAME'], modcombat)
+rownames(modcombat) <- modcombat[,1]
+y <- DGEList(counts=modcombat[,-1], genes=modcombat[,1], group = group)
+design <- model.matrix(~group)
+keep <- filterByExpr(y)
+y <- y[keep,,keep.lib.sizes=FALSE]
+y <- calcNormFactors(y)
+y$samples
+```
+
+
+
+```{r}
+eff.lib.size <- y$samples$lib.size*y$samples$norm.factors
+normCounts <- cpm(y)
+pseudoNormCounts <- log2(normCounts + 1)
+boxplot(pseudoNormCounts, col="gray", las=3)
+plotMDS(pseudoNormCounts)
+
+```
+
+```{r}
+y <- estimateGLMCommonDisp(y, design, verbose=TRUE)
+y <- estimateGLMTrendedDisp(y, design)
+y <- estimateGLMTagwiseDisp(y, design)
+fit <- glmFit(y, design)
+et <- glmLRT(fit)
+res <- topTags(et,n=nrow(et$table))
+is.de <- decideTestsDGE(et)
+summary(is.de)
+res
+```
+
+```{r}
+isDE <- as.logical(is.de)
+DEnames <- rownames(y)[isDE]
+plotSmear(et, de.tags=DEnames)
+abline(h=c(-1,1), col="blue")
+```
+
+```{r}
+library(tidyverse)
+deg <- topTags(et, n = Inf, p = 0.05)$table
+up <- deg[deg$logFC > 0,]
+down <- deg[deg$logFC < 0,]
+head(up)
+head(down)
+write_delim(up,'upreg_h1.5.tab',delim = "\t",escape = "none")
+write_delim(down,'downreg_h1.5.tab',delim = "\t",escape = "none")
+```
+## venm of over-expression- upreg
+
+```{r}
+library("SuperExactTest")
+library(biomaRt)
+library(dplyr)
+mart <- useMart("ENSEMBL_MART_ENSEMBL", host = "https://useast.ensembl.org")
+mart <- useDataset("hsapiens_gene_ensembl", mart)
+h1.2_h1.5 <- read.delim("upreg.tab",header = FALSE)[-1,1]
+h1.2 <- read.delim("upreg_h1.2.tab",header = FALSE)[-1,1]
+h1.5 <- read.delim("upreg_h1.5.tab",header = FALSE)[-1,1]
+h1.2_h1.5 <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = h1.2_h1.5,
+  uniqueRows=TRUE)
+h1.2 <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = h1.2,
+  uniqueRows=TRUE)
+h1.5 <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = h1.5,
+  uniqueRows=TRUE)
+all_coding_genes <- getBM(attributes = c( "hgnc_symbol"), filters = c("biotype"), values = list(biotype="protein_coding"), mart = mart)
+h1.2_h1.5_coding <- filter(h1.2_h1.5, gene_biotype == "protein_coding")
+h1.2_coding <- filter(h1.2, gene_biotype == "protein_coding")
+h1.5_coding <- filter(h1.5, gene_biotype == "protein_coding")
+x <- list(h1.2_h1.5_coding[,1],h1.2_coding[,1],h1.5_coding[,1])
+obj <- supertest(x,n=19383)
+result_coding <- summary(obj)$Table
+
+## lncRNA
+all_lncRNA <- getBM(attributes = c( "hgnc_symbol"), mart = mart)
+h1.2_h1.5_lncRNA <- filter(h1.2_h1.5, gene_biotype != "protein_coding")
+h1.2_lncRNA <- filter(h1.2, gene_biotype != "protein_coding")
+h1.5_lncRNA <- filter(h1.5, gene_biotype != "protein_coding")
+x <- list(h1.2_h1.5_lncRNA[,1],h1.2_lncRNA[,1],h1.5_lncRNA[,1])
+obj <- supertest(x,n=20397)
+result_lncRNA <- summary(obj)$Table
+
+
+
+## Venm diagram
+library("ggvenn")
+A <-list('H1.2'=h1.2_coding[,1],'H1.5'=h1.5_coding[,1],'H1.5&H1.2' = h1.2_h1.5_coding[,1])
+ggvenn(A)
+```
+## venm of over-expression- downreg
+
+```{r}
+library("SuperExactTest")
+library(biomaRt)
+library(dplyr)
+mart <- useMart("ENSEMBL_MART_ENSEMBL", host = "https://useast.ensembl.org")
+mart <- useDataset("hsapiens_gene_ensembl", mart)
+h1.2_h1.5 <- read.delim("downreg.tab",header = FALSE)[-1,1]
+h1.2 <- read.delim("downreg_h1.2.tab",header = FALSE)[-1,1]
+h1.5 <- read.delim("downreg_h1.5.tab",header = FALSE)[-1,1]
+h1.2_h1.5 <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = h1.2_h1.5,
+  uniqueRows=TRUE)
+h1.2 <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = h1.2,
+  uniqueRows=TRUE)
+h1.5 <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = h1.5,
+  uniqueRows=TRUE)
+all_coding_genes <- getBM(attributes = c( "hgnc_symbol"), filters = c("biotype"), values = list(biotype="protein_coding"), mart = mart)
+h1.2_h1.5_coding <- filter(h1.2_h1.5, gene_biotype == "protein_coding")
+h1.2_coding <- filter(h1.2, gene_biotype == "protein_coding")
+h1.5_coding <- filter(h1.5, gene_biotype == "protein_coding")
+x <- list(h1.2_h1.5_coding[,1],h1.2_coding[,1],h1.5_coding[,1])
+obj <- supertest(x,n=19383)
+result_coding <- summary(obj)$Table
+
+## lncRNA
+all_lncRNA <- getBM(attributes = c( "hgnc_symbol"), mart = mart)
+h1.2_h1.5_lncRNA <- filter(h1.2_h1.5, gene_biotype != "protein_coding")
+h1.2_lncRNA <- filter(h1.2, gene_biotype != "protein_coding")
+h1.5_lncRNA <- filter(h1.5, gene_biotype != "protein_coding")
+x <- list(h1.2_h1.5_lncRNA[,1],h1.2_lncRNA[,1],h1.5_lncRNA[,1])
+obj <- supertest(x,n=20397)
+result_lncRNA <- summary(obj)$Table
+
+
+
+## Venm diagram
+library("ggvenn")
+A <-list('H1.2'=h1.2_coding[,1],'H1.5'=h1.5_coding[,1],'H1.5&H1.2' = h1.2_h1.5_coding[,1])
+ggvenn(A)
+```
+
+
+
+
+## clustring og gene expression data
+```{r}
+
+```
+

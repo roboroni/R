@@ -1,0 +1,180 @@
+---
+title: "Dream RNA-seq"
+author: "Me"
+date: "20 9 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Rna-seq of samples not vs control 
+
+```{r }
+genes_asd_expression <- res_ASDvsNo_ASD[res_ASDvsNo_ASD$genes %in% deg_both_vs_h12$genes,]
+genes_asd_expression <- genes_asd_expression[genes_asd_expression$genes %in% deg_both_vs_h15$genes,]
+genes_ov_vs_h12 <- deg_both_vs_h12[deg_both_vs_h12$genes %in% genes_asd_expression$genes,]
+genes_ov_vs_h15 <- deg_both_vs_h15[deg_both_vs_h15$genes %in% genes_asd_expression$genes,]
+genes_asd_expression <- genes_asd_expression[order(genes_asd_expression$genes),]
+genes_ov_vs_h12 <- genes_ov_vs_h12[order(genes_ov_vs_h12$genes),]
+genes_ov_vs_h15 <- genes_ov_vs_h15[order(genes_ov_vs_h15$genes),]
+heatmap_genes_dream <- cbind(genes_asd_expression[,1:2],genes_ov_vs_h12[,2],genes_ov_vs_h15[,2])
+colnames(heatmap_genes_dream) <- c("gene_name","ASDvsNo-ASD","BothvsH1.2","BothvsH1.5")
+
+
+coding_genes_heatmap<- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = heatmap_genes_dream[,1],
+  uniqueRows=TRUE)
+
+
+
+coding_genes_heatmap <- filter(coding_genes_heatmap, gene_biotype == "protein_coding")
+heatmap_genes_dream_coding <- heatmap_genes_dream[heatmap_genes_dream$gene_name %in% coding_genes_heatmap[,1],]
+
+del_genes <- c('SPN','QPRT','C16orf54','ZG16','KIF22','MAZ','PRRT2','C16orf53','MVP','CDIPT','SEZ6L2','ASPHD1','KCTD13','TMEM219','TAOK2','HIRIP3','CCDC95','DOC2A','C16orf92','FAM57B','ALDOA','PPP4C','TBX6','YPEL3','GDPD3','MAPK3','CORO1A')
+del_heat_genes_dream <- heatmap_genes_dream_coding[heatmap_genes_dream_coding$gene_name %in% del_genes,]
+heatmap_genes_dream_coding <- heatmap_genes_dream_coding[rowSums(heatmap_genes_dream_coding[, 2:4] >= 1 | heatmap_genes_dream_coding[, 2:4] <= -1) >= 3,]
+row.names(heatmap_genes_dream_coding) <- heatmap_genes_dream_coding$gene_name
+heatmap_genes_dream_coding[1] <- NULL
+# heatmap_genes_dream_coding <- scale(heatmap_genes_dream_coding)
+# heatmap_genes_dream_coding <- heatmap_genes_dream_coding[rowSums(heatmap_genes_dream_coding[, 1:3] >= 0.5 | heatmap_genes_dream_coding[, 1:3] <= -0.5) >= 3,]
+
+library(ComplexHeatmap)
+library(circlize)
+Heatmap(as.matrix(heatmap_genes_dream_coding),name = "Log(FC Gene Expression)", heatmap_legend_param = list(title_gp = gpar(fontsize = 6), legend_direction = "horizontal"),
+        column_title = "", row_title = "",
+        row_names_gp = gpar(fontsize = 6), column_names_gp =  gpar(fontsize = 6), width = unit(3, "cm"),column_km = 2, column_km_repeats = 1000, row_km = 2, row_km_repeats = 10000, col = colorRamp2(c(min(as.matrix(heatmap_genes_dream_coding)), 0,max(as.matrix(heatmap_genes_dream_coding))),c("blue","white", "red")))
+
+
+
+```
+
+## Rna-seq organoids 
+
+
+```{r}
+data_org <- read.delim("COUNTS-hg38-org.tab")
+data_org <- na.omit(data_org)
+data_org <- aggregate(. ~ NAME, data_org[,-1], sum)
+data_org <- data_org[apply(data_org[,c(-1,-2)], 1, function(x) !all(x==0)),]
+
+colnames(data_org) <- c("gene_name","Control1","Del1","Del2","Del3","Del4","Del5","Del6","Del7","Del8","Del9","Del10","Control2","Del11","Del12","Del13","Del14","Del15","Del16","Del17","Del18","Del19","Del20","Control3","Del21","Del22","Control4","Control5","Control6","Control7","Control8","Control9","Control10","Control11","Control12","Control13","Control14","Control15","Control16","Control17","Control18","Control19","Control20","Control21","Control22","Control23","Control24","Control25","Control26","Control27","Control28","Control29","Control30","Control31","Control32","Control33","Control34","Control35")
+group <- factor(c(1,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1))
+batch <- factor(c(1,2,2,1,3,3,3,3,3,1,3,3,6,6,6,6,6,12,1,13,13,14,3,14,15,3,15,16,16,17,17,17,18,19,18,20,20,20,21,21,21,12,12,19))
+library(sva)
+combat <- data_org[,c(-1,-3,-7,-16,-19,-23,-24,-25,-26,-29,-30,-36,-41,-58)]
+modcombat <- as.data.frame(ComBat_seq(as.matrix(combat),batch=batch, group = group))
+y <- DGEList(counts=modcombat, genes=data_org[,1], group = group)
+design <- model.matrix(~group)
+keep <- filterByExpr(y)
+y <- y[keep,,keep.lib.sizes=FALSE]
+y <- calcNormFactors(y)
+y$samples
+
+```
+
+
+```{r}
+eff.lib.size <- y$samples$lib.size*y$samples$norm.factors
+normCounts <- cpm(y)
+normCounts_org <- cbind(y$genes,normCounts)
+pseudoNormCounts <- log2(normCounts + 1)
+normCounts_org <- cbind(y$genes,pseudoNormCounts)
+boxplot(pseudoNormCounts, col="gray", las=3)
+plotMDS(pseudoNormCounts,col=as.numeric(group))
+legend("topleft", as.character(unique(group)),col=1:4, pch=20)
+```
+
+
+
+
+
+```{r}
+y <- estimateDisp(y, design)
+fit <- glmQLFit(y, design)
+qlf <- glmQLFTest(fit)
+res <- topTags(qlf,n=nrow(qlf$table))
+is.res <- decideTestsDGE(qlf)
+summary(is.res)
+deg_org <- topTags(qlf, n = Inf, p = 0.05)$table
+### what is the diffrence glmQLFit the most accurate type I error control.
+
+
+```
+
+
+```{r}
+result_all_genes_org <- inner_join(deg_org, deg, by = "genes")
+plot_heatmap_expr <- result_all_genes_org[,c(1:2,7:9)]
+colnames(plot_heatmap_expr) <- c('gene_name','Organoids','H1.2','H1.5','H1.2&H1.5')
+
+coding_genes_heatmap<- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = plot_heatmap_expr[,1],
+  uniqueRows=TRUE)
+
+
+
+coding_genes_heatmap <- filter(coding_genes_heatmap, gene_biotype == "protein_coding")
+plot_heatmap_expr_coding <- plot_heatmap_expr[plot_heatmap_expr$gene_name %in% coding_genes_heatmap[,1],]
+del_heat_genes_org <- plot_heatmap_expr_coding[plot_heatmap_expr_coding$gene_name %in% del_genes,]
+
+
+plot_heatmap_expr_coding <- filter(plot_heatmap_expr_coding,  (H1.2 > 0.5 |  H1.2 < -0.5) &  (H1.5 > 0.5 |  H1.5 < -0.5))
+plot_heatmap_expr_coding <- filter(plot_heatmap_expr_coding,  `H1.2&H1.5` > 0.5 |  `H1.2&H1.5` < -0.5)
+
+plot_heatmap_expr_coding <- rbind(plot_heatmap_expr_coding, del_heat_genes_org)
+row.names(plot_heatmap_expr_coding) <- plot_heatmap_expr_coding$gene_name
+plot_heatmap_expr_coding[1] <- NULL
+
+plot_heatmap_expr_coding <- scale(plot_heatmap_expr_coding)
+
+library(ComplexHeatmap)
+library(circlize)
+Heatmap(as.matrix(plot_heatmap_expr_coding),name = "Log(FC Gene Expression)", heatmap_legend_param = list(title_gp = gpar(fontsize = 6), legend_direction = "horizontal"),
+        column_title = "", row_title = "",
+        row_names_gp = gpar(fontsize = 6), column_names_gp =  gpar(fontsize = 6), width = unit(3, "cm"),column_km = 2, column_km_repeats = 10000, row_km = 4, row_km_repeats = 1000, col = colorRamp2(c(min(as.matrix(plot_heatmap_expr_coding)), 0,max(as.matrix(plot_heatmap_expr_coding))),c("blue","white", "red")))
+```
+
+
+```{r}
+row.names(del_heat_genes_org) <- del_heat_genes_org$gene_name
+del_heat_genes_org[1] <- NULL
+
+del_heat_genes_org <-  scale(del_heat_genes_org, center = FALSE,  scale = apply(del_heat_genes_org, 2, sd, na.rm = TRUE))
+
+Heatmap(as.matrix(del_heat_genes_org),name = "Log(FC Gene Expression)", heatmap_legend_param = list(title_gp = gpar(fontsize = 6), legend_direction = "horizontal"),
+        column_title = "", row_title = "",  column_order = c("H1.2","H1.5","Organoids","H1.2&H1.5"),
+        row_names_gp = gpar(fontsize = 6), column_names_gp =  gpar(fontsize = 6), width = unit(3, "cm"), col = colorRamp2(c(min(as.matrix(del_heat_genes_org)), 0,max(as.matrix(del_heat_genes_org))),c("blue","white", "red")))
+
+```
+## Venn DIgrams vs overexpressions
+
+```{r}
+H1.2_venn <- deg
+H1.5_venn <- deg
+both_venn <- deg
+x <- list(H1.2_venn[,1],H1.5_venn[,1],both_venn[,1], deg_org[,1])
+x <- list(res_ASDvsControl[,1], deg_org[,1])
+library(SuperExactTest)
+obj <- supertest(x,n=20000)
+result_venn <- summary(obj)$Table
+library("ggvenn")
+A <-list('ASD' = res_ASDvsControl[,1],"Organoids" = deg_org[,1])
+ggvenn(A,fill_color = c("blue","green"))
+```
+

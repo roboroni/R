@@ -1,0 +1,443 @@
+---
+title: "rna_seq_all_samples"
+author: "Me"
+date: "9 5 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+## Organize Data
+
+You can also embed plots, for example:
+
+```{r}
+R_h1.2_h1.5 <- x[,c(1,6,7,8,9)]
+R_h1.2 <- data
+R_h1.5 <- data
+R_h1.2_h1.5_x <- R_h1.2_h1.5[(R_h1.2_h1.5$NAME %in% R_h1.2$NAME) & (R_h1.2_h1.5$NAME %in% R_h1.5$NAME),]
+R_h1.5_x <- R_h1.5[R_h1.5$NAME %in% R_h1.2_h1.5_x$NAME,]
+R_h1.2_x <- R_h1.2[R_h1.2$NAME %in% R_h1.2_h1.5_x$NAME,]
+colnames(R_h1.2_h1.5_x) <- c('gene_name','Both_1_1','Both_2_1','GFP_1_1_B','GFP_2_1_B')
+colnames(R_h1.5_x) <- c('gene_name','GFP_1_1_H1.5','GFP_2_1_H1.5','H1.5_1_1','H1.5_2_1')
+colnames(R_h1.2_x) <- c('gene_name','GFP_1_1_H1.2','GFP_2_1_H1.2','H1.2_1_1','H1.2_2_1')
+R_h1.2_h1.5_x <- R_h1.2_h1.5_x[order(R_h1.2_h1.5_x$gene_name),]
+R_h1.5_x <- R_h1.5_x[order(R_h1.5_x$gene_name),]
+R_h1.2_x <- R_h1.2_x[order(R_h1.2_x$gene_name),]
+OV_data <- cbind(R_h1.2_h1.5_x, R_h1.5_x[,-1], R_h1.2_x[,-1])
+```
+
+
+
+## Batch effect
+```{r}
+library(sva)
+batch_h1.2_h1.5 <- factor(c(1,2,1,2))
+combat <- R_h1.2_h1.5_x[,-1]
+modcombat_h1.2_h1.5 <- as.data.frame(ComBat_seq(as.matrix(combat),batch=batch_h1.2_h1.5, group=NULL))
+modcombat_h1.2_h1.5 <- data.frame(R_h1.2_h1.5_x['gene_name'], modcombat_h1.2_h1.5)
+
+batch_R_h1.5_x <- factor(c(1,2,1,2))
+combat <- R_h1.5_x[,-1]
+modcombat_R_h1.5_x <- as.data.frame(ComBat_seq(as.matrix(combat),batch=batch_R_h1.5_x, group=NULL))
+modcombat_R_h1.5_x <- data.frame(R_h1.2_h1.5_x['gene_name'], modcombat_R_h1.5_x)
+
+batch_R_h1.2_x <- factor(c(1,2,1,2))
+combat <- R_h1.2_x[,-1]
+modcombat_R_h1.2_x <- as.data.frame(ComBat_seq(as.matrix(combat),batch=batch_R_h1.2_x, group=NULL))
+modcombat_R_h1.2_x <- data.frame(R_h1.2_h1.5_x['gene_name'], modcombat_R_h1.2_x)
+
+batch_OV <- cbind(modcombat_h1.2_h1.5, modcombat_R_h1.5_x[,-1], modcombat_R_h1.2_x[,-1])
+```
+
+
+
+
+
+
+
+```{r}
+group <- factor(c(4,4,1,1,1,1,3,3,1,1,2,2))
+batch <- factor(c(1,1,1,1,2,2,3,3,3,3,3,3))
+combat <- batch_OV[,-1]
+modcombat <- as.data.frame(ComBat_seq(as.matrix(combat),batch=batch, group=group))
+modcombat <- data.frame(OV_data['gene_name'], modcombat)
+y <- DGEList(counts=modcombat[,-1], genes=modcombat[,1], group = group)
+design <- model.matrix(~group)
+keep <- filterByExpr(y)
+y <- y[keep,,keep.lib.sizes=FALSE]
+y <- calcNormFactors(y)
+y$samples
+```
+
+
+```{r}
+eff.lib.size <- y$samples$lib.size*y$samples$norm.factors
+normCounts <- cpm(y)
+pseudoNormCounts <- log2(normCounts + 1)
+normCounts_histones <-cbind(y$genes,pseudoNormCounts)
+boxplot(pseudoNormCounts, col="gray", las=3)
+plotMDS(pseudoNormCounts,col=as.numeric(group))
+legend("topleft", as.character(unique(group)),col=1:4, pch=20)
+```
+## Test of all groups 
+
+```{r}
+y <- estimateDisp(y, design)
+y$common.dispersion
+fit <- glmQLFit(y, design)
+qlf.2vs1 <- glmQLFTest(fit, coef=2)
+qlf.3vs1 <- glmQLFTest(fit, coef=3)
+qlf.4vs1 <- glmQLFTest(fit, coef=4)
+qlf.3vs2 <- glmQLFTest(fit, contrast=c(0,-1,1,0))
+qlf.4vs2 <- glmQLFTest(fit, contrast=c(0,-1,0,1))
+qlf.4vs3 <- glmQLFTest(fit, contrast=c(0,0,-1,1))
+qlf.all <- glmQLFTest(fit, coef=2:4)
+```
+
+
+
+## H1.2 vs control
+```{r}
+res_h1.2 <- topTags(qlf.2vs1,n=nrow(qlf.2vs1$table))
+is.de_h1.2 <- decideTestsDGE(qlf.2vs1)
+summary(is.de_h1.2)
+deg <- topTags(qlf.2vs1, n = Inf, p = 0.05)$table
+up_H1.2 <- deg[deg$logFC > 0,]
+down_H1.2 <- deg[deg$logFC < 0,]
+```
+## H1.5 vs control
+```{r}
+res_h1.5 <- topTags(qlf.3vs1,n=nrow(qlf.3vs1$table))
+is.de_h1.5 <- decideTestsDGE(qlf.3vs1)
+summary(is.de_h1.5)
+deg <- topTags(qlf.3vs1, n = Inf, p = 0.05)$table
+up_H1.5 <- deg[deg$logFC > 0,]
+down_H1.5 <- deg[deg$logFC < 0,]
+```
+
+## H1.5 & H1.2 vs control
+```{r}
+res_both<- topTags(qlf.4vs1,n=nrow(qlf.4vs1$table))
+both <- decideTestsDGE(qlf.4vs1)
+summary(both)
+deg <- topTags(qlf.4vs1, n = Inf, p = 0.05)$table
+up_both<- deg[deg$logFC > 0,]
+down_both <- deg[deg$logFC < 0,]
+```
+
+
+## venn digram vs control
+```{r}
+library("SuperExactTest")
+library(biomaRt)
+library(dplyr)
+mart <- useMart("ENSEMBL_MART_ENSEMBL", host = "https://useast.ensembl.org")
+mart <- useDataset("hsapiens_gene_ensembl", mart)
+h1.2_h1.5 <- up_both[,1]
+h1.2 <- up_H1.2[,1]
+h1.5 <- up_H1.5[,1]
+h1.2_h1.5 <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = h1.2_h1.5,
+  uniqueRows=TRUE)
+h1.2 <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = h1.2,
+  uniqueRows=TRUE)
+h1.5 <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = h1.5,
+  uniqueRows=TRUE)
+all_coding_genes <- getBM(attributes = c( "hgnc_symbol"), filters = c("biotype"), values = list(biotype="protein_coding"), mart = mart)
+h1.2_h1.5_coding <- filter(h1.2_h1.5, gene_biotype == "protein_coding")
+h1.2_coding <- filter(h1.2, gene_biotype == "protein_coding")
+h1.5_coding <- filter(h1.5, gene_biotype == "protein_coding")
+x <- list(h1.2_h1.5_coding[,1],h1.2_coding[,1],h1.5_coding[,1])
+obj <- supertest(x,n=19383)
+result_coding <- summary(obj)$Table
+library("ggvenn")
+A <-list('H1.2'=h1.2_coding[,1],'H1.5'=h1.5_coding[,1],'H1.5&H1.2' = h1.2_h1.5_coding[,1])
+ggvenn(A)
+```
+
+
+
+
+
+
+
+## H1.5 vs  H1.2
+```{r}
+res_vs <- topTags(qlf.3vs2,n=nrow(qlf.3vs2$table))
+vs <- decideTestsDGE(qlf.3vs2)
+summary(vs)
+deg <- topTags(qlf.3vs2, n = Inf, p = 0.05)$table
+up_H1.5vsh1.2 <- deg[deg$logFC > 0,]
+down_H1.5vsh1.2 <- deg[deg$logFC < 0,]
+```
+## H1.5 & H1.2 vs H1.2 
+```{r}
+res_all_vs_h1.2 <- topTags(qlf.4vs2,n=nrow(qlf.4vs2$table))
+all_vs_h1.2 <- decideTestsDGE(qlf.4vs2)
+summary(all_vs_h1.2)
+deg_both_vs_h12 <- topTags(qlf.4vs2, n = Inf, p = 0.05)$table
+up_H1.5h1.2vsh1.2 <- deg[deg$logFC > 0,]
+down_H1.5h1.2vsh1.2 <- deg[deg$logFC < 0,]
+```
+
+## H1.5 & H1.2 vs H1.5 
+```{r}
+res_all_vs_h1.5 <- topTags(qlf.4vs3,n=nrow(qlf.4vs3$table))
+all_vs_h1.5 <- decideTestsDGE(qlf.4vs3)
+summary(all_vs_h1.5)
+deg_both_vs_h15 <- topTags(qlf.4vs3, n = Inf, p = 0.05)$table
+up_H1.5h1.2vsh1.5 <- deg[deg$logFC > 0,]
+down_H1.5h1.2vsh1.5 <- deg[deg$logFC < 0,]
+```
+
+
+## venn digram vs each_group
+```{r}
+library("SuperExactTest")
+library(biomaRt)
+library(dplyr)
+mart <- useMart("ENSEMBL_MART_ENSEMBL", host = "https://useast.ensembl.org")
+mart <- useDataset("hsapiens_gene_ensembl", mart)
+h1.2_h1.5 <- down_H1.5vsh1.2[,1]
+h1.2 <- down_H1.5h1.2vsh1.2[,1]
+h1.5 <- down_H1.5h1.2vsh1.5[,1]
+h1.2_h1.5 <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = h1.2_h1.5,
+  uniqueRows=TRUE)
+h1.2 <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = h1.2,
+  uniqueRows=TRUE)
+h1.5 <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = h1.5,
+  uniqueRows=TRUE)
+all_coding_genes <- getBM(attributes = c( "hgnc_symbol"), filters = c("biotype"), values = list(biotype="protein_coding"), mart = mart)
+h1.2_h1.5_coding <- filter(h1.2_h1.5, gene_biotype == "protein_coding")
+h1.2_coding <- filter(h1.2, gene_biotype == "protein_coding")
+h1.5_coding <- filter(h1.5, gene_biotype == "protein_coding")
+x <- list(h1.2_h1.5_coding[,1],h1.2_coding[,1],h1.5_coding[,1])
+obj <- supertest(x,n=19383)
+result_coding <- summary(obj)$Table
+library("ggvenn")
+A <-list('H1.5&H1.2vsH1.2'=h1.2_coding[,1],'H1.5&H1.2vsH1.5'=h1.5_coding[,1],'H1.5vsH1.2' = h1.2_h1.5_coding[,1])
+ggvenn(A)
+```
+
+
+
+
+
+
+
+## DGE within all samples 
+```{r}
+res_all_vs <- topTags(qlf.all,n=nrow(qlf.all$table))
+all_vs <- decideTestsDGE(qlf.all)
+summary(all_vs)
+deg <- topTags(qlf.all, n = Inf, p = 0.05)$table
+to_heatmap_foldchange <- deg[,1:4]
+to_heatmap_foldchange <- to_heatmap_foldchange[which(to_heatmap_foldchange$genes %in% all_coding_genes$hgnc_symbol),]
+colnames(to_heatmap_foldchange) <- c('gene_name','H1.2','H1.5','H1.2&H1.5')
+row.names(to_heatmap_foldchange) <- to_heatmap_foldchange$gene_name
+to_heatmap_foldchange[1] <- NULL
+to_heatmap_foldchange <- filter(to_heatmap_foldchange,  (H1.2 > 1 |  H1.2 < -1) &  (H1.5 > 1 |  H1.5 < -1))
+to_heatmap_foldchange <- filter(to_heatmap_foldchange,  `H1.2&H1.5` > 1 |  `H1.2&H1.5` < -1)
+to_heatmap_foldchange<- rbind(to_heatmap_foldchange, check_if)
+# library(vegan)
+# fit <- cascadeKM(to_heatmap_foldchange, 1, 20, iter = 100)
+# plot(fit, sortg = TRUE, grpmts.plot = TRUE)
+
+# wss <- (nrow(to_heatmap_foldchange)-1)*sum(apply(to_heatmap_foldchange,2,var))
+# for (i in 2:20) wss[i] <- sum(kmeans(to_heatmap_foldchange,
+#                                      centers=i)$withinss)
+# plot(1:20, wss, type="b", xlab="Number of Clusters",
+#      ylab="Within groups sum of squares")
+
+library(ComplexHeatmap)
+library(circlize)
+ht <- Heatmap(as.matrix(to_heatmap_foldchange),name = "Log(FC Gene Expression)", row_km = 5, row_km_repeats = 1000, row_gap = unit(1, "mm"),  heatmap_legend_param = list(title_gp = gpar(fontsize = 6), legend_direction = "horizontal"),
+        column_title = "", row_title = "",
+        row_names_gp = gpar(fontsize = 6), column_names_gp =  gpar(fontsize = 6), width = unit(3, "cm"), cluster_columns = FALSE, col = colorRamp2(c(min(as.matrix(to_heatmap_foldchange)), 0,max(as.matrix(to_heatmap_foldchange))),c("blue","white", "red")))
+
+draw(ht, heatmap_legend_side="bottom", annotation_legend_side="right",
+           legend_grouping = "original")
+```
+
+
+
+## deletion and expression
+```{r}
+del_genes <- c('SPN','QPRT','C16orf54','ZG16','KIF22','MAZ','PRRT2','C16orf53','MVP','CDIPT','SEZ6L2','ASPHD1','KCTD13','TMEM219','TAOK2','HIRIP3','CCDC95','DOC2A','C16orf92','FAM57B','ALDOA','PPP4C','TBX6','YPEL3','GDPD3','MAPK3','CORO1A')
+both_down_genes <- down_H1.5[,1]
+both_up_genes <- up_H1.5[,1]
+library("SuperExactTest")
+library(biomaRt)
+mart <- useMart("ENSEMBL_MART_ENSEMBL", host = "https://useast.ensembl.org")
+mart <- useDataset("hsapiens_gene_ensembl", mart)
+del_genes <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = del_genes,
+  uniqueRows=TRUE)
+both_down_genes <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = both_down_genes,
+  uniqueRows=TRUE)
+both_up_genes <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = both_up_genes,
+  uniqueRows=TRUE)
+dell_expr_coding <- filter(del_genes, gene_biotype == "protein_coding")
+both_down_genes_coding <- filter(both_down_genes, gene_biotype == "protein_coding")
+both_up_genes_coding <- filter(both_up_genes, gene_biotype == "protein_coding")
+x <- list(both_up_genes_coding[,1],both_down_genes_coding[,1],dell_expr_coding[,1])
+obj <- supertest(x,n=19383)
+result_coding <- summary(obj)$Table
+A <-list('H1.5-Up'=both_up_genes_coding[,1],'H1.5-Down'=both_down_genes_coding[,1],'16p11.2-Deletion' = dell_expr_coding[,1])
+ggvenn(A)
+down_changed <- result_coding[3,]$Elements
+down_changed
+
+check_if <- to_heatmap_foldchange[to_heatmap_foldchange$gene_name %in% c('SPN','QPRT','C16orf54','ZG16','KIF22','MAZ','PRRT2','C16orf53','MVP','CDIPT','SEZ6L2','ASPHD1','KCTD13','TMEM219','TAOK2','HIRIP3','CCDC95','DOC2A','C16orf92','FAM57B','ALDOA','PPP4C','TBX6','YPEL3','GDPD3','MAPK3','CORO1A'), ]
+x <- c("MVP","CORO1A","MAPK3","PPP4C","QPRT","TAOK2","YPEL2","KIF22","ALDOA","MAZ","HIRIP3")
+check_if <- check_if %>%
+  slice(match(x, gene_name))
+row.names(check_if) <- check_if$gene_name
+check_if[1] <- NULL
+
+
+
+Heatmap(as.matrix(check_if),name = "Log(FC Gene Expression)", heatmap_legend_param = list(title_gp = gpar(fontsize = 6), legend_direction = "horizontal"),
+        column_title = "", row_title = "",
+        row_names_gp = gpar(fontsize = 6), column_names_gp =  gpar(fontsize = 6), width = unit(3, "cm"), cluster_columns = FALSE, cluster_rows =  FALSE, col = colorRamp2(c(min(as.matrix(check_if)), 0,max(as.matrix(check_if))),c("blue","white", "red")))
+```
+
+
+
+
+
+## venn digram h1.2&h1.5 vs ASD and ASD-non_ASD
+```{r}
+ASD <- read.delim("downregASDvsControl.tab", header = TRUE, sep = "\t")[,1]
+non_ASD <- read.delim("downregASDvsNo_ASD.tab", header = TRUE, sep = "\t")[,1]
+both_expr <- down_both[,1]
+
+
+library("SuperExactTest")
+library(biomaRt)
+mart <- useMart("ENSEMBL_MART_ENSEMBL", host = "https://useast.ensembl.org")
+mart <- useDataset("hsapiens_gene_ensembl", mart)
+both_expr <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = both_expr,
+  uniqueRows=TRUE)
+ASD <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = ASD,
+  uniqueRows=TRUE)
+non_ASD <- getBM(
+  mart = mart,
+  attributes = c(
+    "hgnc_symbol",
+    "entrezgene_id",
+    "ensembl_gene_id",
+    "gene_biotype"),
+  filter = "hgnc_symbol",
+  values = non_ASD,
+  uniqueRows=TRUE)
+all_coding_genes <- getBM(attributes = c( "hgnc_symbol"), filters = c("biotype"), values = list(biotype="protein_coding"), mart = mart)
+both_expr_coding <- filter(both_expr, gene_biotype == "protein_coding")
+ASD_coding <- filter(ASD, gene_biotype == "protein_coding")
+non_ASD_coding <- filter(non_ASD, gene_biotype == "protein_coding")
+x <- list(ASD_coding[,1],non_ASD_coding[,1],both_expr_coding[,1])
+obj <- supertest(x,n=19383)
+result_coding <- summary(obj)$Table
+library("ggvenn")
+A <-list('ASDvsControl'=ASD_coding[,1],'ASDvsnon_ASD'=non_ASD_coding[,1],'H1.2&H1.5vsControl' = both_expr_coding[,1])
+ggvenn(A)
+```
+
+
+
+
+
+
+
+
